@@ -336,6 +336,13 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
+server.get('/', (req, res) => {
+    res.json({
+        message: "GridCo PME Backend — Antigravity Cloud is Live! 🚀",
+        status: "Running",
+        endpoints: ["/health", "/api/data", "/api/projects/completed"]
+    });
+});
 // ============================================================
 // Start server
 // ============================================================
