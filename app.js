@@ -5,7 +5,7 @@ window.dbStore = {
 
 // --- Antigravity Cloud Backend URL ---
 // Change this to your cloud deployment URL when deploying remotely
-const API_BASE = 'http://localhost:3000';
+const API_BASE = "https://pme-nexus-xxxx.onrender.com/api/data";
 
 // Track pending sync operations for retry
 let pendingSyncs = [];
