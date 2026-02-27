@@ -132,6 +132,34 @@ const server = http.createServer(async (req, res) => {
         });
         return;
     }
+    // ============================================================
+    // Serve Static Files (CSS, JS, Images)
+    // ============================================================
+    if (pathname.match(/\.(css|js|png|jpg|jpeg|gif|svg)$/)) {
+        const filePath = path.join(__dirname, pathname);
+        const extname = path.extname(filePath);
+
+        // Decide the correct Content-Type based on the file extension
+        let contentType = 'text/plain';
+        switch (extname) {
+            case '.css': contentType = 'text/css'; break;
+            case '.js': contentType = 'application/javascript'; break;
+            case '.png': contentType = 'image/png'; break;
+            case '.jpg': case '.jpeg': contentType = 'image/jpeg'; break;
+            case '.svg': contentType = 'image/svg+xml'; break;
+        }
+
+        fs.readFile(filePath, (err, data) => {
+            if (err) {
+                res.writeHead(404);
+                res.end('File not found');
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': contentType });
+            res.end(data);
+        });
+        return; // Important: stops the server from running your API code below
+    }
 
     // Preflight
     if (req.method === 'OPTIONS') {
