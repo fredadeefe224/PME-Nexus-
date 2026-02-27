@@ -120,12 +120,17 @@ const server = http.createServer(async (req, res) => {
     const query = parsedUrl.query;
 
     if (pathname === '/') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            message: "GridCo PME Backend is Live! 🚀",
-            status: "Running"
-        }));
-        return; // This is important so it doesn't keep looking for other files
+        const htmlPath = path.join(__dirname, 'index.html'); // Make sure this matches your file name
+        fs.readFile(htmlPath, (err, data) => {
+            if (err) {
+                res.writeHead(500);
+                res.end('Error loading index.html');
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(data);
+        });
+        return;
     }
 
     // Preflight
