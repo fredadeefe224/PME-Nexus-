@@ -115,6 +115,9 @@ function logRequest(method, pathname, statusCode) {
 
 const server = http.createServer(async (req, res) => {
     setCORS(res);
+    const parsedUrl = url.parse(req.url, true);
+    const pathname = parsedUrl.pathname;
+    const query = parsedUrl.query;
 
     if (pathname === '/') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -132,9 +135,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    const parsedUrl = url.parse(req.url, true);
-    const pathname = parsedUrl.pathname;
-    const query = parsedUrl.query;
+
 
     try {
         // ==============================================================
