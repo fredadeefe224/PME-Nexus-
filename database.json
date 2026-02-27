@@ -1,0 +1,129 @@
+{
+  "users": [
+    {
+      "id": "1772111300919",
+      "username": "Fred",
+      "email": "fredadeefe224@gmail.com",
+      "role": "Admin",
+      "password": "Watchlearn",
+      "theme_preference": "dark",
+      "createdAt": "2026-02-26T13:08:20.919Z",
+      "isDisabled": false,
+      "lastLogin": "2026-02-27T11:17:33.389Z"
+    },
+    {
+      "id": "1772111429389",
+      "username": "Faud Kentucky",
+      "email": "faud@gmail.com",
+      "role": "Project Manager",
+      "password": "read",
+      "theme_preference": "dark",
+      "createdAt": "2026-02-26T13:10:29.389Z",
+      "isDisabled": true,
+      "lastLogin": null
+    },
+    {
+      "id": "1772191026190",
+      "username": "Richard",
+      "email": "r@gmail.com",
+      "role": "Project Manager",
+      "password": "5555",
+      "theme_preference": "dark",
+      "createdAt": "2026-02-27T11:17:06.190Z",
+      "isDisabled": false,
+      "lastLogin": "2026-02-27T11:18:30.096Z"
+    }
+  ],
+  "projects": [
+    {
+      "id": "1772111691581",
+      "name": "IT Projects",
+      "description": "Renovation of the IT archive space",
+      "createdBy": "1772111300919",
+      "createdAt": "2026-02-26T13:14:51.581Z",
+      "completionDate": "2026-02-26T13:15:35.101Z"
+    }
+  ],
+  "stages": [
+    {
+      "id": "1772111691582-0",
+      "projectId": "1772111691581",
+      "name": "Project Identification",
+      "plannedStart": "2026-02-26",
+      "plannedEnd": "2026-03-05",
+      "actualStart": "",
+      "actualEnd": "",
+      "progress": 100,
+      "status": "Completed"
+    },
+    {
+      "id": "1772111691582-1",
+      "projectId": "1772111691581",
+      "name": "Detailed Planning",
+      "plannedStart": "2026-02-26",
+      "plannedEnd": "2026-03-05",
+      "actualStart": "",
+      "actualEnd": "",
+      "progress": 100,
+      "status": "Completed"
+    },
+    {
+      "id": "1772111691582-2",
+      "projectId": "1772111691581",
+      "name": "Procurement",
+      "plannedStart": "2026-02-26",
+      "plannedEnd": "2026-03-05",
+      "actualStart": "",
+      "actualEnd": "",
+      "progress": 100,
+      "status": "Completed"
+    },
+    {
+      "id": "1772111691582-3",
+      "projectId": "1772111691581",
+      "name": "Implementation",
+      "plannedStart": "2026-02-26",
+      "plannedEnd": "2026-03-05",
+      "actualStart": "",
+      "actualEnd": "",
+      "progress": 100,
+      "status": "Completed"
+    },
+    {
+      "id": "1772111691582-4",
+      "projectId": "1772111691581",
+      "name": "Closure",
+      "plannedStart": "2026-02-26",
+      "plannedEnd": "2026-03-05",
+      "actualStart": "",
+      "actualEnd": "",
+      "progress": 100,
+      "status": "Completed"
+    }
+  ],
+  "notifications": [],
+  "delayRecords": [],
+  "lessonsLearned": [
+    {
+      "id": "1772111792648",
+      "projectId": "1772111691581",
+      "stageId": null,
+      "lessonDesc": "Details",
+      "recommendation": "Details are neccesary",
+      "recordedAt": "2026-02-26T13:16:32.648Z"
+    }
+  ],
+  "projectReports": [
+    {
+      "id": "1772111797423",
+      "projectId": "1772111691581",
+      "currentStageStatus": "Completed",
+      "overallProgress": 100,
+      "executiveSummary": "Project \"IT Projects\" is currently Completed. Total average progress is 100%. Delays logged to date: 0. Lessons recorded to date: 1.",
+      "keyDelaysSummary": "No delays recorded",
+      "lessonsLearnedSummary": "1 lesson(s) recorded",
+      "content": "\n    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>\n    <head>\n        <meta charset='utf-8'>\n        <title>Project Report - IT Projects</title>\n        <style>\n            body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; }\n            h1 { color: #2c3e50; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }\n            h2 { color: #34495e; margin-top: 20px; }\n            table { width: 100%; border-collapse: collapse; margin-top: 15px; }\n            th, td { border: 1px solid #bdc3c7; padding: 8px; text-align: left; }\n            th { background-color: #ecf0f1; font-weight: bold; }\n            .behind-schedule { color: #e74c3c; font-weight: bold; }\n            .on-track { color: #27ae60; }\n            .completed { color: #2980b9; }\n            .meta-info { margin-bottom: 20px; font-size: 14px; color: #7f8c8d; text-align: right; }\n        </style>\n    </head>\n    <body>\n        <h1>PROJECT REPORT: IT Projects</h1>\n        <div class=\"meta-info\">Generated At: 2/26/2026, 1:16:37 PM</div>\n\n        <h2>1. EXECUTIVE SUMMARY</h2>\n        <p>Project \"IT Projects\" is currently Completed. Total average progress is 100%. Delays logged to date: 0. Lessons recorded to date: 1.</p>\n\n        <h2>2. PROJECT OVERVIEW</h2>\n        <ul>\n            <li><strong>Name:</strong> IT Projects</li>\n            <li><strong>Description:</strong> Renovation of the IT archive space</li>\n            <li><strong>Creation Date:</strong> 2/26/2026</li>\n            <li><strong>Total Stages:</strong> 5</li>\n            <li><strong>Overall Progress:</strong> 100%</li>\n            <li><strong>Current Status:</strong> Completed</li>\n        </ul>\n\n        <h2>3. STAGE-BY-STAGE PERFORMANCE</h2>\n        <table>\n            <tr>\n                <th>Stage Name</th>\n                <th>Planned Start / End</th>\n                <th>Actual Start / End</th>\n                <th>Progress</th>\n                <th>Status</th>\n            </tr>\n            <tr>\n                <td>Project Identification</td>\n                <td>2026-02-26 to 2026-03-05</td>\n                <td>TBD to TBD</td>\n                <td>100%</td>\n                <td class=\"completed\">Completed</td>\n            </tr>\n            <tr>\n                <td>Detailed Planning</td>\n                <td>2026-02-26 to 2026-03-05</td>\n                <td>TBD to TBD</td>\n                <td>100%</td>\n                <td class=\"completed\">Completed</td>\n            </tr>\n            <tr>\n                <td>Procurement</td>\n                <td>2026-02-26 to 2026-03-05</td>\n                <td>TBD to TBD</td>\n                <td>100%</td>\n                <td class=\"completed\">Completed</td>\n            </tr>\n            <tr>\n                <td>Implementation</td>\n                <td>2026-02-26 to 2026-03-05</td>\n                <td>TBD to TBD</td>\n                <td>100%</td>\n                <td class=\"completed\">Completed</td>\n            </tr>\n            <tr>\n                <td>Closure</td>\n                <td>2026-02-26 to 2026-03-05</td>\n                <td>TBD to TBD</td>\n                <td>100%</td>\n                <td class=\"completed\">Completed</td>\n            </tr>\n        </table>\n\n        <h2>4. DELAY REASONS</h2><p>No delays logged.</p>\n        <h2>5. LESSONS LEARNED</h2><ul>\n            <li>\n                <strong>General Project</strong><br>\n                <strong>Description:</strong> Details<br>\n                <strong>Recommendation:</strong> Details are neccesary\n            </li></ul>\n    </body>\n    </html>",
+      "createdAt": "2026-02-26T13:16:37.423Z"
+    }
+  ]
+}
