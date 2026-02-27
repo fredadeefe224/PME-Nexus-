@@ -116,6 +116,15 @@ function logRequest(method, pathname, statusCode) {
 const server = http.createServer(async (req, res) => {
     setCORS(res);
 
+    if (pathname === '/') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            message: "GridCo PME Backend is Live! 🚀",
+            status: "Running"
+        }));
+        return; // This is important so it doesn't keep looking for other files
+    }
+
     // Preflight
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
@@ -336,16 +345,7 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
-// ============================================================
-// Home Route - Notice we are using 'app.get' instead of 'server.get'
-// ============================================================
-app.get('/', (req, res) => {
-    res.json({
-        message: "GridCo PME Backend — Antigravity Cloud is Live! 🚀",
-        status: "Running",
-        endpoints: ["/health", "/api/data", "/api/projects/completed"]
-    });
-});
+
 // ============================================================
 // Start server
 // ============================================================
