@@ -4,7 +4,7 @@ window.dbStore = {
 };
 
 
-const API_BASE = "https://pme-nexus.onrender.com/api/data";
+const API_BASE = "https://pme-nexus.onrender.com";
 
 // This tells the browser: "Stay on the same website I'm on, but go to /api/data"
 fetch(API_BASE)
