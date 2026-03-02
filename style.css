@@ -1207,33 +1207,6 @@ textarea:focus {
     opacity: 0.7;
 }
 
-/* Responsive for Projects */
-@media (max-width: 768px) {
-    .projects-section-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .projects-filters {
-        width: 100%;
-    }
-
-    .filter-group {
-        flex: 1;
-    }
-
-    .filter-group select {
-        width: 100%;
-        min-width: 0;
-    }
-
-    .projects-table th,
-    .projects-table td {
-        padding: 0.75rem;
-        font-size: 0.85rem;
-    }
-}
-
 /* ============================================================
    Global Notifications Panel — Floating Overlay
    ============================================================ */
@@ -1262,11 +1235,390 @@ textarea:focus {
     }
 }
 
-/* Responsive: on narrow screens, stretch panel full width */
-@media (max-width: 500px) {
+/* ============================================================
+   Table Responsive Wrapper
+   ============================================================ */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+}
+
+/* ============================================================
+   MOBILE RESPONSIVE — @media (max-width: 768px)
+   ============================================================ */
+@media screen and (max-width: 768px) {
+
+    /* ── Global Typography & Spacing ─────────────────────── */
+    .page-title {
+        font-size: 1.6rem;
+    }
+
+    .page-subtitle {
+        font-size: 0.95rem;
+    }
+
+    .view-section {
+        padding: 1rem;
+    }
+
+    .section-title h3 {
+        font-size: 1.1rem;
+    }
+
+    /* ── Navigation ───────────────────────────────────────── */
+    .glass-nav {
+        flex-wrap: wrap;
+        padding: 0.75rem 1rem;
+        gap: 0.5rem;
+    }
+
+    .nav-brand {
+        font-size: 1.2rem;
+    }
+
+    .nav-links {
+        order: 3;
+        width: 100%;
+        margin-left: 0;
+        gap: 0.35rem;
+        justify-content: stretch;
+    }
+
+    .nav-btn {
+        flex: 1;
+        justify-content: center;
+        font-size: 0.85rem;
+        padding: 0.55rem 0.5rem;
+        min-height: 44px;
+    }
+
+    .nav-user {
+        gap: 0.75rem;
+    }
+
+    .user-info {
+        display: none;
+    }
+
+    .icon-btn {
+        width: 44px;
+        height: 44px;
+    }
+
+    /* ── Authentication Cards ─────────────────────────────── */
+    .auth-card {
+        padding: 1.5rem;
+        margin: 1rem;
+        max-width: 100%;
+        border-radius: 12px;
+    }
+
+    .auth-card h2 {
+        font-size: 1.4rem;
+    }
+
+    /* ── Dashboard ────────────────────────────────────────── */
+    .view-header {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .projects-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .project-card {
+        padding: 1.15rem;
+    }
+
+    .project-header h3 {
+        font-size: 1.1rem;
+    }
+
+    .project-meta {
+        margin-top: 1rem;
+        padding-top: 0.75rem;
+    }
+
+    /* ── Projects View (Tables) ───────────────────────────── */
+    .projects-section-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .projects-filters {
+        width: 100%;
+    }
+
+    .filter-group {
+        flex: 1;
+    }
+
+    .filter-group select {
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+    }
+
+    .projects-table th,
+    .projects-table td {
+        padding: 0.65rem 0.75rem;
+        font-size: 0.82rem;
+        white-space: nowrap;
+    }
+
+    .projects-section[style*="margin-top: 3rem"] {
+        margin-top: 2rem !important;
+    }
+
+    /* ── Project Detail View ──────────────────────────────── */
+    .header-actions {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        width: 100%;
+    }
+
+    .header-actions>div[style*="flex-direction: column"] {
+        align-items: flex-start !important;
+        margin-right: 0 !important;
+    }
+
+    .header-actions>div[style*="flex-direction: column"] .badge {
+        align-self: flex-start;
+    }
+
+    .summary-progress {
+        order: -1;
+    }
+
+    /* ── Stage Cards ──────────────────────────────────────── */
+    .stage-card {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 1.15rem;
+        gap: 1rem;
+    }
+
+    .stage-info h4 {
+        font-size: 1.05rem;
+        flex-wrap: wrap;
+    }
+
+    .stage-dates {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .stage-stats {
+        margin-left: 0;
+        width: 100%;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .stage-progress {
+        align-items: flex-start;
+        width: 100%;
+    }
+
+    .progress-bar-bg {
+        width: 100%;
+    }
+
+    .stage-actions {
+        margin-left: 0;
+    }
+
+    /* ── Lessons Section ──────────────────────────────────── */
+    .lessons-container[style*="margin-top: 3rem"] {
+        margin-top: 2rem !important;
+    }
+
+    .lessons-container .section-title {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.75rem;
+    }
+
+    /* ── Modals ───────────────────────────────────────────── */
+    .modal-backdrop {
+        padding: 0.75rem;
+        align-items: flex-start;
+        padding-top: 3rem;
+    }
+
+    .modal {
+        max-width: 100% !important;
+        border-radius: 12px;
+    }
+
+    .modal-header {
+        padding: 1.15rem;
+    }
+
+    .modal-body {
+        padding: 1.15rem;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-footer {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .modal-footer .btn-primary,
+    .modal-footer .btn-text,
+    .modal-footer .btn-secondary {
+        width: 100%;
+        justify-content: center;
+        min-height: 44px;
+    }
+
+    /* ── Touch Targets (Buttons, Inputs, Links) ──────────── */
+    .btn-primary,
+    .btn-secondary {
+        min-height: 44px;
+        padding: 0.65rem 1.25rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-text {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    input,
+    select,
+    textarea {
+        min-height: 44px;
+        font-size: 16px;
+        /* prevents iOS zoom on focus */
+        padding: 0.7rem 1rem;
+    }
+
+    .input-wrapper input,
+    .input-wrapper select {
+        padding-left: 2.75rem;
+    }
+
+    .add-btn {
+        min-height: 44px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .btn-download-report {
+        min-height: 44px;
+        padding: 0.55rem 1rem;
+        font-size: 0.82rem;
+    }
+
+    /* ── User Management ──────────────────────────────────── */
+    #users-view .view-header>div:last-child {
+        flex-direction: column !important;
+        gap: 0.75rem;
+    }
+
+    #users-view .input-group {
+        max-width: 100% !important;
+    }
+
+    /* ── Toasts ───────────────────────────────────────────── */
+    .toast-container {
+        left: 1rem;
+        right: 1rem;
+        bottom: 1rem;
+    }
+
+    .toast {
+        font-size: 0.85rem;
+        padding: 0.85rem 1rem;
+    }
+
+    /* ── Notifications Panel ──────────────────────────────── */
     .notifications-panel-global {
-        left: 0.75rem;
-        right: 0.75rem;
+        left: 0.5rem;
+        right: 0.5rem;
         width: auto;
+        top: 64px;
+        max-height: calc(100vh - 80px);
+    }
+
+    /* ── Background Blobs — reduce on mobile for perf ───── */
+    .blob-1 {
+        width: 200px;
+        height: 200px;
+    }
+
+    .blob-2 {
+        width: 250px;
+        height: 250px;
+    }
+
+    .blob-3 {
+        width: 150px;
+        height: 150px;
+    }
+
+    /* ── Progress Ring in Header ──────────────────────────── */
+    .summary-progress .progress-ring {
+        width: 50px;
+        height: 50px;
+    }
+
+    /* ── Glass panels — soften border radius on mobile ──── */
+    .glass-panel {
+        border-radius: 12px;
+    }
+}
+
+/* ============================================================
+   EXTRA SMALL DEVICES — @media (max-width: 400px)
+   ============================================================ */
+@media screen and (max-width: 400px) {
+
+    .page-title {
+        font-size: 1.35rem;
+    }
+
+    .nav-brand span {
+        font-size: 1rem;
+    }
+
+    .nav-btn {
+        font-size: 0.75rem;
+        padding: 0.5rem 0.3rem;
+    }
+
+    .nav-btn i {
+        width: 14px;
+        height: 14px;
+    }
+
+    .auth-card {
+        padding: 1.25rem;
+    }
+
+    .view-section {
+        padding: 0.75rem;
+    }
+
+    .stage-card {
+        padding: 1rem;
+    }
+
+    .modal-backdrop {
+        padding: 0.5rem;
+        padding-top: 2rem;
     }
 }

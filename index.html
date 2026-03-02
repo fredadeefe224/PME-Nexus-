@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>PME System - Premium Project Management</title>
     <!-- Modern Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -192,23 +192,25 @@
                 </div>
             </div>
 
-            <div class="glass-panel" style="padding: 1rem; overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left; color: var(--text-main);">
-                    <thead>
-                        <tr style="border-bottom: 1px solid var(--panel-border); font-family: var(--font-heading);">
-                            <th style="padding: 1rem;">Full Name</th>
-                            <th style="padding: 1rem;">Email</th>
-                            <th style="padding: 1rem;">Role</th>
-                            <th style="padding: 1rem;">Account Status</th>
-                            <th style="padding: 1rem;">Date Joined</th>
-                            <th style="padding: 1rem;">Last Login</th>
-                            <th style="padding: 1rem; text-align: right;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-table-body" style="font-family: var(--font-body); font-size: 0.95rem;">
-                        <!-- Users injected here -->
-                    </tbody>
-                </table>
+            <div class="glass-panel" style="padding: 1rem;">
+                <div class="table-responsive">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; color: var(--text-main);">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--panel-border); font-family: var(--font-heading);">
+                                <th style="padding: 1rem;">Full Name</th>
+                                <th style="padding: 1rem;">Email</th>
+                                <th style="padding: 1rem;">Role</th>
+                                <th style="padding: 1rem;">Account Status</th>
+                                <th style="padding: 1rem;">Date Joined</th>
+                                <th style="padding: 1rem;">Last Login</th>
+                                <th style="padding: 1rem; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body" style="font-family: var(--font-body); font-size: 0.95rem;">
+                            <!-- Users injected here -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
@@ -273,18 +275,20 @@
                     </div>
                 </div>
                 <div class="glass-panel" style="padding: 0; overflow: hidden;">
-                    <table class="projects-table" id="completed-projects-table">
-                        <thead>
-                            <tr>
-                                <th>Project Name</th>
-                                <th>Date Completed</th>
-                                <th style="text-align: right;">Report</th>
-                            </tr>
-                        </thead>
-                        <tbody id="completed-projects-body">
-                            <!-- Completed projects injected here -->
-                        </tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="projects-table" id="completed-projects-table">
+                            <thead>
+                                <tr>
+                                    <th>Project Name</th>
+                                    <th>Date Completed</th>
+                                    <th style="text-align: right;">Report</th>
+                                </tr>
+                            </thead>
+                            <tbody id="completed-projects-body">
+                                <!-- Completed projects injected here -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -297,19 +301,21 @@
                     </div>
                 </div>
                 <div class="glass-panel" style="padding: 0; overflow: hidden;">
-                    <table class="projects-table" id="in-progress-projects-table">
-                        <thead>
-                            <tr>
-                                <th>Project Name</th>
-                                <th>Current Stage</th>
-                                <th>Completion</th>
-                                <th>Deadline</th>
-                            </tr>
-                        </thead>
-                        <tbody id="in-progress-projects-body">
-                            <!-- In-progress projects injected here -->
-                        </tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="projects-table" id="in-progress-projects-table">
+                            <thead>
+                                <tr>
+                                    <th>Project Name</th>
+                                    <th>Current Stage</th>
+                                    <th>Completion</th>
+                                    <th>Deadline</th>
+                                </tr>
+                            </thead>
+                            <tbody id="in-progress-projects-body">
+                                <!-- In-progress projects injected here -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </section>
