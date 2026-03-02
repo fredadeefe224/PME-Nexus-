@@ -3,8 +3,11 @@ window.dbStore = {
     users: [], projects: [], stages: [], notifications: [], delayRecords: [], lessonsLearned: [], projectReports: []
 };
 
+
+const API_BASE = "https://pme-nexus.onrender.com/api/data";
+
 // This tells the browser: "Stay on the same website I'm on, but go to /api/data"
-fetch('/api/data')
+fetch(API_BASE)
     .then(response => response.json())
     .then(data => {
         // Your code to display data
