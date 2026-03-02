@@ -3,9 +3,13 @@ window.dbStore = {
     users: [], projects: [], stages: [], notifications: [], delayRecords: [], lessonsLearned: [], projectReports: []
 };
 
-// --- Antigravity Cloud Backend URL ---
-// Change this to your cloud deployment URL when deploying remotely
-const API_BASE = "https://pme-nexus.onrender.com/api/data";
+// This tells the browser: "Stay on the same website I'm on, but go to /api/data"
+fetch('/api/data')
+    .then(response => response.json())
+    .then(data => {
+        // Your code to display data
+    })
+    .catch(err => console.error("Fetch failed:", err));
 
 // Track pending sync operations for retry
 let pendingSyncs = [];
