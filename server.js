@@ -434,6 +434,42 @@ const server = http.createServer(async (req, res) => {
             });
 
             // ==============================================================
+            // DELETE /api/documents — Remove a document by ID
+            // ==============================================================
+        } else if (pathname === '/api/documents' && req.method === 'DELETE') {
+            const docId = query.id;
+
+            if (!docId) {
+                logRequest(req.method, pathname, 400);
+                sendJSON(res, 400, { error: 'Missing required query parameter: id' });
+                return;
+            }
+
+            const dbData = readDB();
+            if (!dbData) {
+                logRequest(req.method, pathname, 500);
+                sendJSON(res, 500, { error: 'Failed to read database' });
+                return;
+            }
+
+            if (!Array.isArray(dbData.documents)) {
+                dbData.documents = [];
+            }
+
+            const originalLength = dbData.documents.length;
+            dbData.documents = dbData.documents.filter(d => d.id !== docId);
+
+            if (dbData.documents.length === originalLength) {
+                logRequest(req.method, pathname, 404);
+                sendJSON(res, 404, { error: 'Document not found', id: docId });
+                return;
+            }
+
+            await writeDB(dbData);
+            logRequest(req.method, pathname, 200);
+            sendJSON(res, 200, { success: true, message: 'Document deleted', id: docId });
+
+            // ==============================================================
             // 404 — Not found
             // ==============================================================
         } else {
@@ -472,6 +508,7 @@ server.listen(PORT, () => {
     console.log('  GET  /api/projects/evaluate     → Re-evaluate statuses');
     console.log('  GET  /api/documents             → List documents');
     console.log('  POST /api/documents             → Save document');
+    console.log('  DELETE /api/documents?id=...     → Delete document');
     console.log('');
     console.log('Waiting for requests...');
     console.log('');

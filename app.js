@@ -2199,6 +2199,8 @@ function renderDocumentLibrary() {
     const countBadge = document.getElementById('doc-count-badge');
     if (!container) return;
 
+    const canDelete = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Project Manager');
+
     // Fetch fresh documents from backend
     fetch(`${API_BASE}/api/documents`)
         .then(res => res.json())
@@ -2241,6 +2243,7 @@ function renderDocumentLibrary() {
                 const card = document.createElement('div');
                 card.className = `document-card ${typeClass}`;
                 card.setAttribute('title', `Click to view: ${doc.name}`);
+                card.setAttribute('data-doc-id', doc.id);
                 card.innerHTML = `
                     <div class="doc-icon">
                         <i data-lucide="${iconName}"></i>
@@ -2255,14 +2258,78 @@ function renderDocumentLibrary() {
                             <span>${uploadDate}</span>
                         </div>
                     </div>
+                    ${canDelete ? `<button class="doc-delete-btn" data-doc-id="${doc.id}" title="Delete document"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>` : ''}
                     <div class="doc-open-icon">
                         <i data-lucide="external-link" style="width: 18px; height: 18px;"></i>
                     </div>
                 `;
 
-                card.addEventListener('click', () => openDocument(doc));
+                card.addEventListener('click', (e) => {
+                    // Don't open document if the delete button was clicked
+                    if (e.target.closest('.doc-delete-btn')) return;
+                    openDocument(doc);
+                });
                 container.appendChild(card);
             });
+
+            // Attach delete handlers
+            if (canDelete) {
+                container.querySelectorAll('.doc-delete-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const docId = btn.getAttribute('data-doc-id');
+                        const docCard = btn.closest('.document-card');
+                        const docName = docCard?.querySelector('.doc-name')?.textContent || 'this document';
+
+                        if (!confirm(`Are you sure you want to delete "${docName}"?`)) return;
+
+                        fetch(`${API_BASE}/api/documents?id=${encodeURIComponent(docId)}`, {
+                            method: 'DELETE'
+                        })
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.success) {
+                                    // Remove from DOM instantly
+                                    if (docCard) {
+                                        docCard.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                                        docCard.style.opacity = '0';
+                                        docCard.style.transform = 'scale(0.95)';
+                                        setTimeout(() => {
+                                            docCard.remove();
+                                            // Update local store
+                                            window.dbStore.documents = (window.dbStore.documents || []).filter(d => d.id !== docId);
+                                            // Update count badge
+                                            const remaining = container.querySelectorAll('.document-card').length;
+                                            if (countBadge) {
+                                                countBadge.textContent = `${remaining} file${remaining !== 1 ? 's' : ''}`;
+                                            }
+                                            // Show empty state if no documents left
+                                            if (remaining === 0) {
+                                                container.innerHTML = `
+                                                <div class="documents-empty">
+                                                    <i data-lucide="folder-open"></i>
+                                                    <p>No documents uploaded yet.</p>
+                                                    <p style="font-size: 0.82rem; margin-top: 0.5rem; opacity: 0.7;">
+                                                        Project Managers and Admins can upload PDF, Word, and Excel files.
+                                                    </p>
+                                                </div>
+                                            `;
+                                                lucide.createIcons();
+                                            }
+                                        }, 300);
+                                    }
+                                    showToast(`"${docName}" deleted successfully.`, 'success');
+                                } else {
+                                    showToast('Failed to delete document.', 'error');
+                                }
+                            })
+                            .catch(err => {
+                                console.error('[Doc Delete Error]', err);
+                                showToast('Failed to delete document.', 'error');
+                            });
+                    });
+                });
+            }
 
             lucide.createIcons();
         })

@@ -1803,6 +1803,32 @@ textarea:focus {
     opacity: 0.4;
 }
 
+.doc-delete-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--text-muted);
+    border: none;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.document-card:hover .doc-delete-btn {
+    opacity: 1;
+}
+
+.doc-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    transform: scale(1.1);
+}
+
 /* Responsive Document Grid */
 @media (max-width: 640px) {
     .documents-grid {
