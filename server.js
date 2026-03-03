@@ -87,6 +87,80 @@ function evaluateProjectCompletionStatus(dbData) {
 }
 
 // ============================================================
+// Server-side delay detection & notification generation
+// Scans all stages, marks overdue ones as "Behind Schedule",
+// and creates per-user notifications for Admins & PMs.
+// Deduplicates by stageId to avoid spamming.
+// ============================================================
+function generateDelayNotifications(dbData) {
+    const stages = dbData.stages || [];
+    const projects = dbData.projects || [];
+    const users = dbData.users || [];
+    const notifications = dbData.notifications || [];
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const targetUsers = users.filter(u => u.role === 'Admin' || u.role === 'Project Manager');
+
+    let stagesUpdated = false;
+    let notifsCreated = 0;
+
+    stages.forEach(stage => {
+        const progress = parseInt(stage.progress) || 0;
+
+        // --- Step 1: Evaluate & update stage status ---
+        let correctStatus = 'On Track';
+        if (progress === 100) {
+            correctStatus = 'Completed';
+        } else if (todayStr > stage.plannedEnd) {
+            correctStatus = 'Behind Schedule';
+        }
+
+        if (stage.status !== correctStatus) {
+            stage.status = correctStatus;
+            stagesUpdated = true;
+        }
+
+        // --- Step 2: Generate notifications for behind-schedule stages ---
+        if (correctStatus === 'Behind Schedule') {
+            const project = projects.find(p => p.id === stage.projectId);
+            const projectName = project ? project.name : 'Unknown Project';
+
+            targetUsers.forEach(user => {
+                // Deduplicate: check if this user already has a notification for this stage
+                const alreadyExists = notifications.find(
+                    n => n.stageId === stage.id &&
+                        n.userId === user.id &&
+                        n.message.includes('behind schedule')
+                );
+
+                if (!alreadyExists) {
+                    notifications.push({
+                        id: Date.now().toString() + '-' + stage.id + '-' + user.id,
+                        userId: user.id,
+                        projectId: stage.projectId,
+                        stageId: stage.id,
+                        message: `Stage "${stage.name}" in project "${projectName}" is behind schedule.`,
+                        read: false,
+                        createdAt: new Date().toISOString()
+                    });
+                    notifsCreated++;
+                }
+            });
+        }
+    });
+
+    // Write changes back into the dbData object (caller handles persistence)
+    if (stagesUpdated) {
+        dbData.stages = stages;
+    }
+    if (notifsCreated > 0) {
+        dbData.notifications = notifications;
+    }
+
+    return { stagesUpdated, notifsCreated };
+}
+
+// ============================================================
 // Response helpers
 // ============================================================
 
@@ -200,6 +274,19 @@ const server = http.createServer(async (req, res) => {
                 sendJSON(res, 500, { error: 'Failed to read database' });
                 return;
             }
+
+            // --- Evaluate delays & generate notifications before responding ---
+            const delayResult = generateDelayNotifications(dbData);
+            evaluateProjectCompletionStatus(dbData);
+
+            // Persist if anything changed
+            if (delayResult.stagesUpdated || delayResult.notifsCreated) {
+                await writeDB(dbData);
+                if (delayResult.notifsCreated > 0) {
+                    console.log(`[DELAY CHECK] Generated ${delayResult.notifsCreated} new delay notification(s)`);
+                }
+            }
+
             logRequest(req.method, pathname, 200);
             sendJSON(res, 200, dbData);
 
