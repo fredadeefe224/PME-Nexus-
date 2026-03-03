@@ -14,6 +14,8 @@
     <link rel="stylesheet" href="style.css">
     <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Cloudinary Upload Widget -->
+    <script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
 </head>
 
 <body class="dark-theme">
@@ -221,13 +223,34 @@
                     <h1 class="page-title">Dashboard</h1>
                     <p class="page-subtitle">Overview of your active projects</p>
                 </div>
-                <button id="create-project-btn" class="btn-primary add-btn">
-                    <i data-lucide="plus"></i> New Project
-                </button>
+                <div class="dashboard-header-actions">
+                    <button id="upload-document-btn" class="btn-secondary add-btn" style="display: none;">
+                        <i data-lucide="upload-cloud"></i> Upload Document
+                    </button>
+                    <button id="create-project-btn" class="btn-primary add-btn">
+                        <i data-lucide="plus"></i> New Project
+                    </button>
+                </div>
             </div>
 
             <div class="projects-grid" id="projects-container">
                 <!-- Projects injected here -->
+            </div>
+
+            <!-- Document Library Section -->
+            <div class="document-library-section" style="margin-top: 3rem;">
+                <div class="section-title"
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <i data-lucide="file-archive" style="color: var(--primary); width: 24px; height: 24px;"></i>
+                        <h3 style="font-family: var(--font-heading); font-size: 1.4rem;">Document Library</h3>
+                    </div>
+                    <span id="doc-count-badge" class="badge"
+                        style="background: rgba(99, 102, 241, 0.15); color: var(--primary);">0 files</span>
+                </div>
+                <div id="documents-container" class="documents-grid">
+                    <!-- Documents injected here -->
+                </div>
             </div>
         </section>
 

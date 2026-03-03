@@ -1622,3 +1622,201 @@ textarea:focus {
         padding-top: 2rem;
     }
 }
+
+/* ============================================================
+   Document Library & Upload
+   ============================================================ */
+
+.dashboard-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.documents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.document-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--panel-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--text-main);
+    position: relative;
+    overflow: hidden;
+}
+
+.document-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+    border-color: rgba(99, 102, 241, 0.4);
+}
+
+.document-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    border-radius: 3px 0 0 3px;
+}
+
+.document-card.doc-pdf::before {
+    background: #ef4444;
+}
+
+.document-card.doc-docx::before {
+    background: #3b82f6;
+}
+
+.document-card.doc-xlsx::before {
+    background: #10b981;
+}
+
+.document-card.doc-other::before {
+    background: var(--text-muted);
+}
+
+.doc-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.doc-pdf .doc-icon {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.doc-docx .doc-icon {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+}
+
+.doc-xlsx .doc-icon {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.doc-other .doc-icon {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-muted);
+}
+
+.doc-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.doc-info .doc-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.doc-info .doc-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+}
+
+.doc-type-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.doc-pdf .doc-type-badge {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.doc-docx .doc-type-badge {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+}
+
+.doc-xlsx .doc-type-badge {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.doc-other .doc-type-badge {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-muted);
+}
+
+.doc-open-icon {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.document-card:hover .doc-open-icon {
+    opacity: 1;
+    color: var(--primary);
+}
+
+.documents-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    background: var(--panel-bg);
+    backdrop-filter: blur(12px);
+    border: 1px dashed var(--panel-border);
+    border-radius: 12px;
+}
+
+.documents-empty i {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 1rem;
+    opacity: 0.4;
+}
+
+/* Responsive Document Grid */
+@media (max-width: 640px) {
+    .documents-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-header-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+    }
+
+    .dashboard-header-actions .btn-primary,
+    .dashboard-header-actions .btn-secondary {
+        width: 100%;
+    }
+}

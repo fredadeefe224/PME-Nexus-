@@ -1,6 +1,6 @@
 // --- Database Service (Antigravity Cloud Backend Integration) ---
 window.dbStore = {
-    users: [], projects: [], stages: [], notifications: [], delayRecords: [], lessonsLearned: [], projectReports: []
+    users: [], projects: [], stages: [], notifications: [], delayRecords: [], lessonsLearned: [], projectReports: [], documents: []
 };
 
 
@@ -86,7 +86,7 @@ function fetchAllData(retries = 3) {
         .then(data => {
             if (data && typeof data === 'object' && Object.keys(data).length > 0) {
                 // Merge backend data into dbStore, preserving structure
-                const collections = ['users', 'projects', 'stages', 'notifications', 'delayRecords', 'lessonsLearned', 'projectReports'];
+                const collections = ['users', 'projects', 'stages', 'notifications', 'delayRecords', 'lessonsLearned', 'projectReports', 'documents'];
                 collections.forEach(key => {
                     if (Array.isArray(data[key])) {
                         window.dbStore[key] = data[key];
@@ -256,7 +256,7 @@ function initializeApp() {
 
     fetchAllData(3).then(result => {
         // Ensure all collections exist locally even if backend had partial data
-        const collections = ['users', 'projects', 'stages', 'notifications', 'delayRecords', 'lessonsLearned', 'projectReports'];
+        const collections = ['users', 'projects', 'stages', 'notifications', 'delayRecords', 'lessonsLearned', 'projectReports', 'documents'];
         collections.forEach(key => {
             if (!Array.isArray(window.dbStore[key])) {
                 window.dbStore[key] = [];
@@ -512,6 +512,83 @@ function setupEventListeners() {
     document.getElementById('form-lesson')?.addEventListener('submit', handleSaveLesson);
 
     document.getElementById('generate-report-btn')?.addEventListener('click', handleGenerateReport);
+
+    // --- Cloudinary Upload Widget ---
+    document.getElementById('upload-document-btn')?.addEventListener('click', () => {
+        if (!currentUser || (currentUser.role !== 'Project Manager' && currentUser.role !== 'Admin')) {
+            showToast('Only Project Managers and Admins can upload documents.', 'error');
+            return;
+        }
+
+        const widget = cloudinary.createUploadWidget({
+            cloudName: 'dz11ualzg',
+            uploadPreset: 'PME Nexus Cloud',
+            sources: ['local', 'url', 'google_drive', 'dropbox'],
+            clientAllowedFormats: ['pdf', 'docx', 'xlsx'],
+            maxFileSize: 10000000, // 10MB
+            multiple: true,
+            showAdvancedOptions: false,
+            cropping: false,
+            showSkipCropButton: true,
+            folder: 'pme-nexus-documents',
+            resourceType: 'raw',
+            theme: document.body.classList.contains('light-theme') ? 'white' : 'minimal'
+        }, (error, result) => {
+            if (error) {
+                console.error('[Cloudinary Error]', error);
+                showToast('Upload failed. Please try again.', 'error');
+                return;
+            }
+
+            if (result.event === 'success') {
+                const info = result.info;
+                const fileUrl = info.secure_url;
+                const originalName = info.original_filename || info.public_id;
+                const fileFormat = info.format || info.original_extension || getExtensionFromName(originalName);
+
+                // Determine file type
+                let fileType = 'other';
+                if (fileFormat === 'pdf') fileType = 'pdf';
+                else if (fileFormat === 'docx' || fileFormat === 'doc') fileType = 'docx';
+                else if (fileFormat === 'xlsx' || fileFormat === 'xls') fileType = 'xlsx';
+
+                const docPayload = {
+                    name: originalName + (fileFormat ? '.' + fileFormat : ''),
+                    url: fileUrl,
+                    type: fileType,
+                    uploadedBy: currentUser.username,
+                    date: new Date().toISOString()
+                };
+
+                // Save to backend
+                fetch(`${API_BASE}/api/documents`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(docPayload)
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Add to local store
+                            if (!Array.isArray(window.dbStore.documents)) {
+                                window.dbStore.documents = [];
+                            }
+                            window.dbStore.documents.push(data.document);
+                            showToast(`"${docPayload.name}" uploaded successfully!`, 'success');
+                            renderDocumentLibrary();
+                        } else {
+                            showToast('Failed to save document record.', 'error');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('[Doc Save Error]', err);
+                        showToast('Failed to save document record.', 'error');
+                    });
+            }
+        });
+
+        widget.open();
+    });
 }
 
 function setupPasswordToggles() {
@@ -682,6 +759,12 @@ function updateUserNav() {
     if (createStageBtn) createStageBtn.style.display = currentUser.role === 'Viewer' ? 'none' : 'flex';
     if (createLessonBtn) createLessonBtn.style.display = currentUser.role === 'Viewer' ? 'none' : 'flex';
 
+    // Upload Document button: only visible to Admin and Project Manager
+    const uploadDocBtn = document.getElementById('upload-document-btn');
+    if (uploadDocBtn) {
+        uploadDocBtn.style.display = (currentUser.role === 'Project Manager' || currentUser.role === 'Admin') ? 'flex' : 'none';
+    }
+
     const navUsersBtn = document.getElementById('nav-users-btn');
     if (navUsersBtn) navUsersBtn.style.display = (currentUser.email === 'fredadeefe224@gmail.com') ? 'flex' : 'none';
 }
@@ -811,6 +894,9 @@ function renderDashboard() {
         card.addEventListener('click', () => openProjectDetail(project.id));
         container.appendChild(card);
     });
+
+    // Render document library
+    renderDocumentLibrary();
 }
 
 // --- Projects Tab ---
@@ -2058,4 +2144,143 @@ function confirmUserAction(title, message, onConfirm) {
 
     actionPending = onConfirm; // Bound to global click listener on #confirm-action-btn
     toggleModal('modal-confirm-action');
+}
+
+// ============================================================
+// Document Management — Library Rendering & Smart Viewing
+// ============================================================
+
+function getExtensionFromName(filename) {
+    if (!filename) return '';
+    const parts = filename.split('.');
+    return parts.length > 1 ? parts.pop().toLowerCase() : '';
+}
+
+function getDocTypeClass(type) {
+    if (type === 'pdf') return 'doc-pdf';
+    if (type === 'docx' || type === 'doc') return 'doc-docx';
+    if (type === 'xlsx' || type === 'xls') return 'doc-xlsx';
+    return 'doc-other';
+}
+
+function getDocIcon(type) {
+    if (type === 'pdf') return 'file-text';
+    if (type === 'docx' || type === 'doc') return 'file-type';
+    if (type === 'xlsx' || type === 'xls') return 'file-spreadsheet';
+    return 'file';
+}
+
+function getDocTypeLabel(type) {
+    if (type === 'pdf') return 'PDF';
+    if (type === 'docx' || type === 'doc') return 'Word';
+    if (type === 'xlsx' || type === 'xls') return 'Excel';
+    return type.toUpperCase();
+}
+
+function openDocument(doc) {
+    const url = doc.url;
+    const type = (doc.type || '').toLowerCase();
+
+    if (type === 'pdf') {
+        // PDFs — open directly in a new tab
+        window.open(url, '_blank');
+    } else if (type === 'docx' || type === 'doc' || type === 'xlsx' || type === 'xls') {
+        // Word / Excel — use Google Docs Viewer
+        const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
+        window.open(viewerUrl, '_blank');
+    } else {
+        // Fallback — open in new tab
+        window.open(url, '_blank');
+    }
+}
+
+function renderDocumentLibrary() {
+    const container = document.getElementById('documents-container');
+    const countBadge = document.getElementById('doc-count-badge');
+    if (!container) return;
+
+    // Fetch fresh documents from backend
+    fetch(`${API_BASE}/api/documents`)
+        .then(res => res.json())
+        .then(data => {
+            const documents = data.documents || [];
+
+            // Update local store
+            window.dbStore.documents = documents;
+
+            // Update count badge
+            if (countBadge) {
+                countBadge.textContent = `${documents.length} file${documents.length !== 1 ? 's' : ''}`;
+            }
+
+            if (documents.length === 0) {
+                container.innerHTML = `
+                    <div class="documents-empty">
+                        <i data-lucide="folder-open"></i>
+                        <p>No documents uploaded yet.</p>
+                        <p style="font-size: 0.82rem; margin-top: 0.5rem; opacity: 0.7;">
+                            Project Managers and Admins can upload PDF, Word, and Excel files.
+                        </p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            // Sort newest first
+            documents.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            container.innerHTML = '';
+
+            documents.forEach(doc => {
+                const typeClass = getDocTypeClass(doc.type);
+                const iconName = getDocIcon(doc.type);
+                const typeLabel = getDocTypeLabel(doc.type);
+                const uploadDate = doc.date ? new Date(doc.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown date';
+
+                const card = document.createElement('div');
+                card.className = `document-card ${typeClass}`;
+                card.setAttribute('title', `Click to view: ${doc.name}`);
+                card.innerHTML = `
+                    <div class="doc-icon">
+                        <i data-lucide="${iconName}"></i>
+                    </div>
+                    <div class="doc-info">
+                        <div class="doc-name">${doc.name}</div>
+                        <div class="doc-meta">
+                            <span class="doc-type-badge">${typeLabel}</span>
+                            <span>•</span>
+                            <span>${doc.uploadedBy || 'Unknown'}</span>
+                            <span>•</span>
+                            <span>${uploadDate}</span>
+                        </div>
+                    </div>
+                    <div class="doc-open-icon">
+                        <i data-lucide="external-link" style="width: 18px; height: 18px;"></i>
+                    </div>
+                `;
+
+                card.addEventListener('click', () => openDocument(doc));
+                container.appendChild(card);
+            });
+
+            lucide.createIcons();
+        })
+        .catch(err => {
+            console.error('[Document Library Error]', err);
+            // Fallback to local store
+            const documents = window.dbStore.documents || [];
+            if (countBadge) {
+                countBadge.textContent = `${documents.length} file${documents.length !== 1 ? 's' : ''}`;
+            }
+            if (documents.length === 0) {
+                container.innerHTML = `
+                    <div class="documents-empty">
+                        <i data-lucide="folder-open"></i>
+                        <p>No documents uploaded yet.</p>
+                    </div>
+                `;
+            }
+            lucide.createIcons();
+        });
 }

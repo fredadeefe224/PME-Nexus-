@@ -19,7 +19,8 @@ if (!fs.existsSync(DB_FILE)) {
         notifications: [],
         delayRecords: [],
         lessonsLearned: [],
-        projectReports: []
+        projectReports: [],
+        documents: []
     }, null, 2));
 }
 
@@ -372,6 +373,67 @@ const server = http.createServer(async (req, res) => {
             });
 
             // ==============================================================
+            // GET /api/documents — Retrieve all documents
+            // ==============================================================
+        } else if (pathname === '/api/documents' && req.method === 'GET') {
+            const dbData = readDB();
+            if (!dbData) {
+                logRequest(req.method, pathname, 500);
+                sendJSON(res, 500, { error: 'Failed to read database' });
+                return;
+            }
+            logRequest(req.method, pathname, 200);
+            sendJSON(res, 200, { documents: dbData.documents || [] });
+
+            // ==============================================================
+            // POST /api/documents — Save a new document record
+            // ==============================================================
+        } else if (pathname === '/api/documents' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => body += chunk.toString());
+            req.on('end', async () => {
+                try {
+                    const { name, url, type, uploadedBy, date } = JSON.parse(body);
+
+                    if (!name || !url) {
+                        logRequest(req.method, pathname, 400);
+                        sendJSON(res, 400, { error: 'Missing required fields: name, url' });
+                        return;
+                    }
+
+                    const dbData = readDB();
+                    if (!dbData) {
+                        logRequest(req.method, pathname, 500);
+                        sendJSON(res, 500, { error: 'Failed to read database' });
+                        return;
+                    }
+
+                    if (!Array.isArray(dbData.documents)) {
+                        dbData.documents = [];
+                    }
+
+                    const newDoc = {
+                        id: Date.now().toString(),
+                        name: name,
+                        url: url,
+                        type: type || 'unknown',
+                        uploadedBy: uploadedBy || 'Unknown',
+                        date: date || new Date().toISOString()
+                    };
+
+                    dbData.documents.push(newDoc);
+                    await writeDB(dbData);
+
+                    logRequest(req.method, pathname, 201);
+                    sendJSON(res, 201, { success: true, document: newDoc });
+                } catch (e) {
+                    console.error('[DOC SAVE ERROR]', e.message);
+                    logRequest(req.method, pathname, 500);
+                    sendJSON(res, 500, { error: 'Failed to save document: ' + e.message });
+                }
+            });
+
+            // ==============================================================
             // 404 — Not found
             // ==============================================================
         } else {
@@ -408,6 +470,8 @@ server.listen(PORT, () => {
     console.log('  GET  /api/projects/completed    → Completed projects');
     console.log('  GET  /api/projects/in-progress  → In-progress projects');
     console.log('  GET  /api/projects/evaluate     → Re-evaluate statuses');
+    console.log('  GET  /api/documents             → List documents');
+    console.log('  POST /api/documents             → Save document');
     console.log('');
     console.log('Waiting for requests...');
     console.log('');
