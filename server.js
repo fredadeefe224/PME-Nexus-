@@ -2,54 +2,135 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const { MongoClient } = require('mongodb');
 
 // ============================================================
-// Antigravity Cloud — GridCo PME Backend Server
+// Antigravity Cloud — GridCo PME Backend Server (MongoDB)
 // ============================================================
 
-const DB_FILE = path.join(__dirname, 'database.json');
 const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI || '';
+const DB_NAME = process.env.DB_NAME || 'pme_nexus';
 
-// Initialize DB file if not exists
-if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify({
-        users: [],
-        projects: [],
-        stages: [],
-        notifications: [],
-        delayRecords: [],
-        lessonsLearned: [],
-        projectReports: [],
-        documents: []
-    }, null, 2));
+// All collection names (must match the keys in the old database.json structure)
+const COLLECTIONS = [
+    'users', 'projects', 'stages', 'notifications',
+    'delayRecords', 'lessonsLearned', 'projectReports', 'documents'
+];
+
+// ============================================================
+// MongoDB Connection
+// ============================================================
+let db = null;
+let mongoClient = null;
+
+async function connectToDB() {
+    if (!MONGO_URI) {
+        console.error('[MONGO] ❌ MONGO_URI environment variable is not set!');
+        console.error('[MONGO] Set it in your Render dashboard or .env file.');
+        console.error('[MONGO] Example: mongodb+srv://user:pass@cluster.mongodb.net/?retryWrites=true&w=majority');
+        process.exit(1);
+    }
+
+    try {
+        mongoClient = new MongoClient(MONGO_URI);
+        await mongoClient.connect();
+
+        db = mongoClient.db(DB_NAME);
+
+        // Verify connection
+        await db.command({ ping: 1 });
+        console.log(`[MONGO] ✅ Connected to MongoDB Atlas — database: "${DB_NAME}"`);
+
+        return db;
+    } catch (err) {
+        console.error('[MONGO] ❌ Connection failed:', err.message);
+        process.exit(1);
+    }
 }
 
 // ============================================================
-// Concurrency-safe DB helpers (write queue prevents race conditions)
+// DB Helpers — Same interface as the old JSON file system
+// readDB()  → returns { users: [], projects: [], ... }
+// writeDB() → persists the full object back to MongoDB
 // ============================================================
-let writeQueue = Promise.resolve();
 
-function readDB() {
+async function readDB() {
     try {
-        return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+        const result = {};
+
+        // Read all collections in parallel
+        const reads = COLLECTIONS.map(async (col) => {
+            const docs = await db.collection(col).find({}).toArray();
+            // Strip MongoDB's internal _id field so the data looks identical
+            // to the old database.json format the frontend expects
+            result[col] = docs.map(doc => {
+                const { _id, ...rest } = doc;
+                return rest;
+            });
+        });
+
+        await Promise.all(reads);
+        return result;
     } catch (e) {
         console.error('[DB READ ERROR]', e.message);
         return null;
     }
 }
 
-function writeDB(dbData) {
-    return new Promise((resolve, reject) => {
-        writeQueue = writeQueue.then(() => {
-            try {
-                fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2));
-                resolve(true);
-            } catch (e) {
-                console.error('[DB WRITE ERROR]', e.message);
-                reject(e);
+async function writeDB(dbData) {
+    try {
+        // Write each collection that exists in the data object
+        const writes = COLLECTIONS.map(async (col) => {
+            if (!Array.isArray(dbData[col])) return;
+
+            const collection = db.collection(col);
+
+            // Bulk replace: clear existing, insert new
+            await collection.deleteMany({});
+
+            if (dbData[col].length > 0) {
+                await collection.insertMany(dbData[col]);
             }
         });
-    });
+
+        await Promise.all(writes);
+        return true;
+    } catch (e) {
+        console.error('[DB WRITE ERROR]', e.message);
+        throw e;
+    }
+}
+
+// ============================================================
+// Single-collection helpers (more efficient for targeted ops)
+// ============================================================
+
+async function readCollection(collectionName) {
+    try {
+        const docs = await db.collection(collectionName).find({}).toArray();
+        return docs.map(doc => {
+            const { _id, ...rest } = doc;
+            return rest;
+        });
+    } catch (e) {
+        console.error(`[DB READ ${collectionName} ERROR]`, e.message);
+        return [];
+    }
+}
+
+async function writeCollection(collectionName, data) {
+    try {
+        const collection = db.collection(collectionName);
+        await collection.deleteMany({});
+        if (data.length > 0) {
+            await collection.insertMany(data);
+        }
+        return true;
+    } catch (e) {
+        console.error(`[DB WRITE ${collectionName} ERROR]`, e.message);
+        throw e;
+    }
 }
 
 // ============================================================
@@ -259,7 +340,7 @@ const server = http.createServer(async (req, res) => {
             logRequest(req.method, pathname, 200);
             sendJSON(res, 200, {
                 status: 'ok',
-                service: 'GridCo PME Backend — Antigravity Cloud',
+                service: 'GridCo PME Backend — MongoDB Atlas',
                 uptime: process.uptime(),
                 timestamp: new Date().toISOString()
             });
@@ -268,7 +349,7 @@ const server = http.createServer(async (req, res) => {
             // GET /api/data — Return full database
             // ==============================================================
         } else if (pathname === '/api/data' && req.method === 'GET') {
-            const dbData = readDB();
+            const dbData = await readDB();
             if (!dbData) {
                 logRequest(req.method, pathname, 500);
                 sendJSON(res, 500, { error: 'Failed to read database' });
@@ -307,21 +388,20 @@ const server = http.createServer(async (req, res) => {
                         return;
                     }
 
-                    const dbData = readDB();
-                    if (!dbData) {
-                        logRequest(req.method, pathname, 500);
-                        sendJSON(res, 500, { error: 'Failed to read database' });
-                        return;
-                    }
-
-                    dbData[key] = data;
+                    // Write only the synced collection for efficiency
+                    await writeCollection(key, data);
 
                     // Auto-evaluate project completion whenever stages are synced
                     if (key === 'stages') {
-                        evaluateProjectCompletionStatus(dbData);
+                        const dbData = await readDB();
+                        if (dbData) {
+                            const updated = evaluateProjectCompletionStatus(dbData);
+                            if (updated) {
+                                await writeCollection('projects', dbData.projects);
+                            }
+                        }
                     }
 
-                    await writeDB(dbData);
                     logRequest(req.method, pathname, 200);
                     sendJSON(res, 200, { success: true });
                 } catch (e) {
@@ -336,7 +416,7 @@ const server = http.createServer(async (req, res) => {
             // Optional query params: ?month=MM&year=YYYY
             // ==============================================================
         } else if (pathname === '/api/projects/completed' && req.method === 'GET') {
-            const dbData = readDB();
+            const dbData = await readDB();
             if (!dbData) {
                 logRequest(req.method, pathname, 500);
                 sendJSON(res, 500, { error: 'Failed to read database' });
@@ -344,8 +424,10 @@ const server = http.createServer(async (req, res) => {
             }
 
             // Re-evaluate to ensure fresh status
-            evaluateProjectCompletionStatus(dbData);
-            await writeDB(dbData);
+            const updated = evaluateProjectCompletionStatus(dbData);
+            if (updated) {
+                await writeCollection('projects', dbData.projects);
+            }
 
             const stages = dbData.stages || [];
             let completedProjects = (dbData.projects || []).filter(p => {
@@ -394,15 +476,17 @@ const server = http.createServer(async (req, res) => {
             // GET /api/projects/in-progress — Fetch in-progress projects
             // ==============================================================
         } else if (pathname === '/api/projects/in-progress' && req.method === 'GET') {
-            const dbData = readDB();
+            const dbData = await readDB();
             if (!dbData) {
                 logRequest(req.method, pathname, 500);
                 sendJSON(res, 500, { error: 'Failed to read database' });
                 return;
             }
 
-            evaluateProjectCompletionStatus(dbData);
-            await writeDB(dbData);
+            const updated = evaluateProjectCompletionStatus(dbData);
+            if (updated) {
+                await writeCollection('projects', dbData.projects);
+            }
 
             const stages = dbData.stages || [];
             const inProgressProjects = (dbData.projects || []).filter(p => {
@@ -432,7 +516,7 @@ const server = http.createServer(async (req, res) => {
             // GET /api/projects/evaluate — Trigger re-evaluation
             // ==============================================================
         } else if (pathname === '/api/projects/evaluate' && req.method === 'GET') {
-            const dbData = readDB();
+            const dbData = await readDB();
             if (!dbData) {
                 logRequest(req.method, pathname, 500);
                 sendJSON(res, 500, { error: 'Failed to read database' });
@@ -441,7 +525,7 @@ const server = http.createServer(async (req, res) => {
 
             const updated = evaluateProjectCompletionStatus(dbData);
             if (updated) {
-                await writeDB(dbData);
+                await writeCollection('projects', dbData.projects);
             }
 
             const stages = dbData.stages || [];
@@ -463,14 +547,9 @@ const server = http.createServer(async (req, res) => {
             // GET /api/documents — Retrieve all documents
             // ==============================================================
         } else if (pathname === '/api/documents' && req.method === 'GET') {
-            const dbData = readDB();
-            if (!dbData) {
-                logRequest(req.method, pathname, 500);
-                sendJSON(res, 500, { error: 'Failed to read database' });
-                return;
-            }
+            const documents = await readCollection('documents');
             logRequest(req.method, pathname, 200);
-            sendJSON(res, 200, { documents: dbData.documents || [] });
+            sendJSON(res, 200, { documents });
 
             // ==============================================================
             // POST /api/documents — Save a new document record
@@ -480,36 +559,24 @@ const server = http.createServer(async (req, res) => {
             req.on('data', chunk => body += chunk.toString());
             req.on('end', async () => {
                 try {
-                    const { name, url, type, uploadedBy, date } = JSON.parse(body);
+                    const { name, url: fileUrl, type, uploadedBy, date } = JSON.parse(body);
 
-                    if (!name || !url) {
+                    if (!name || !fileUrl) {
                         logRequest(req.method, pathname, 400);
                         sendJSON(res, 400, { error: 'Missing required fields: name, url' });
                         return;
                     }
 
-                    const dbData = readDB();
-                    if (!dbData) {
-                        logRequest(req.method, pathname, 500);
-                        sendJSON(res, 500, { error: 'Failed to read database' });
-                        return;
-                    }
-
-                    if (!Array.isArray(dbData.documents)) {
-                        dbData.documents = [];
-                    }
-
                     const newDoc = {
                         id: Date.now().toString(),
                         name: name,
-                        url: url,
+                        url: fileUrl,
                         type: type || 'unknown',
                         uploadedBy: uploadedBy || 'Unknown',
                         date: date || new Date().toISOString()
                     };
 
-                    dbData.documents.push(newDoc);
-                    await writeDB(dbData);
+                    await db.collection('documents').insertOne(newDoc);
 
                     logRequest(req.method, pathname, 201);
                     sendJSON(res, 201, { success: true, document: newDoc });
@@ -532,27 +599,14 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
 
-            const dbData = readDB();
-            if (!dbData) {
-                logRequest(req.method, pathname, 500);
-                sendJSON(res, 500, { error: 'Failed to read database' });
-                return;
-            }
+            const result = await db.collection('documents').deleteOne({ id: docId });
 
-            if (!Array.isArray(dbData.documents)) {
-                dbData.documents = [];
-            }
-
-            const originalLength = dbData.documents.length;
-            dbData.documents = dbData.documents.filter(d => d.id !== docId);
-
-            if (dbData.documents.length === originalLength) {
+            if (result.deletedCount === 0) {
                 logRequest(req.method, pathname, 404);
                 sendJSON(res, 404, { error: 'Document not found', id: docId });
                 return;
             }
 
-            await writeDB(dbData);
             logRequest(req.method, pathname, 200);
             sendJSON(res, 200, { success: true, message: 'Document deleted', id: docId });
 
@@ -572,48 +626,62 @@ const server = http.createServer(async (req, res) => {
 
 
 // ============================================================
-// Start server
+// Start server (connects to MongoDB first, then listens)
 // ============================================================
-server.listen(PORT, () => {
-    console.log('');
-    console.log('╔══════════════════════════════════════════════════════╗');
-    console.log('║   GridCo PME Backend — Antigravity Cloud            ║');
-    console.log('╠══════════════════════════════════════════════════════╣');
-    console.log(`║   Status  : RUNNING                                 ║`);
-    console.log(`║   Port    : ${String(PORT).padEnd(41)}║`);
-    console.log(`║   URL     : http://localhost:${String(PORT).padEnd(25)}║`);
-    console.log(`║   Health  : http://localhost:${String(PORT).padEnd(1)}/health${' '.repeat(Math.max(0, 17 - String(PORT).length))}║`);
-    console.log('║   DB File : database.json                           ║');
-    console.log('╚══════════════════════════════════════════════════════╝');
-    console.log('');
-    console.log('Endpoints:');
-    console.log('  GET  /health                    → Health check');
-    console.log('  GET  /api/data                  → Full database');
-    console.log('  POST /api/sync                  → Sync collection');
-    console.log('  GET  /api/projects/completed    → Completed projects');
-    console.log('  GET  /api/projects/in-progress  → In-progress projects');
-    console.log('  GET  /api/projects/evaluate     → Re-evaluate statuses');
-    console.log('  GET  /api/documents             → List documents');
-    console.log('  POST /api/documents             → Save document');
-    console.log('  DELETE /api/documents?id=...     → Delete document');
-    console.log('');
-    console.log('Waiting for requests...');
-    console.log('');
+async function startServer() {
+    // 1. Connect to MongoDB
+    await connectToDB();
+
+    // 2. Start HTTP server
+    server.listen(PORT, () => {
+        console.log('');
+        console.log('╔══════════════════════════════════════════════════════╗');
+        console.log('║   GridCo PME Backend — MongoDB Atlas                ║');
+        console.log('╠══════════════════════════════════════════════════════╣');
+        console.log(`║   Status  : RUNNING                                 ║`);
+        console.log(`║   Port    : ${String(PORT).padEnd(41)}║`);
+        console.log(`║   URL     : http://localhost:${String(PORT).padEnd(25)}║`);
+        console.log(`║   Health  : http://localhost:${String(PORT).padEnd(1)}/health${' '.repeat(Math.max(0, 17 - String(PORT).length))}║`);
+        console.log('║   DB      : MongoDB Atlas                           ║');
+        console.log('╚══════════════════════════════════════════════════════╝');
+        console.log('');
+        console.log('Endpoints:');
+        console.log('  GET  /health                    → Health check');
+        console.log('  GET  /api/data                  → Full database');
+        console.log('  POST /api/sync                  → Sync collection');
+        console.log('  GET  /api/projects/completed    → Completed projects');
+        console.log('  GET  /api/projects/in-progress  → In-progress projects');
+        console.log('  GET  /api/projects/evaluate     → Re-evaluate statuses');
+        console.log('  GET  /api/documents             → List documents');
+        console.log('  POST /api/documents             → Save document');
+        console.log('  DELETE /api/documents?id=...     → Delete document');
+        console.log('');
+        console.log('Waiting for requests...');
+        console.log('');
+    });
+}
+
+startServer().catch(err => {
+    console.error('[STARTUP FATAL]', err);
+    process.exit(1);
 });
 
-// Graceful shutdown
+// Graceful shutdown — close MongoDB connection
 process.on('SIGTERM', () => {
     console.log('\n[SHUTDOWN] Received SIGTERM — closing server...');
-    server.close(() => {
-        console.log('[SHUTDOWN] Server closed.');
+    server.close(async () => {
+        if (mongoClient) await mongoClient.close();
+        console.log('[SHUTDOWN] Server and MongoDB connection closed.');
         process.exit(0);
     });
 });
 
 process.on('SIGINT', () => {
     console.log('\n[SHUTDOWN] Received SIGINT — closing server...');
-    server.close(() => {
-        console.log('[SHUTDOWN] Server closed.');
+    server.close(async () => {
+        if (mongoClient) await mongoClient.close();
+        console.log('[SHUTDOWN] Server and MongoDB connection closed.');
         process.exit(0);
     });
 });
+
