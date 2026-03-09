@@ -1407,7 +1407,12 @@ async function generateAndDownloadReport(projectId, btn) {
 // Helper: Builds a docx.Document object from report data
 
 function buildDocxReport({ project, stages, delays, lessons, totalProgress, projectStatus, executiveSummary }) {
-    const docx = window.docx;
+    // 1. Safety Check: Did the CDN actually load?
+    if (typeof window.docx === "undefined") {
+        console.error("CRITICAL ERROR: The docx library failed to load from the CDN.");
+        alert("The document generator failed to load. Please disable your ad-blocker or check your firewall.");
+        return; // Stop running the code so it doesn't crash
+    }
     const { Document, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType, BorderStyle, ShadingType } = docx;
 
     // Color constants
