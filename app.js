@@ -1405,8 +1405,9 @@ async function generateAndDownloadReport(projectId, btn) {
 }
 
 // Helper: Builds a docx.Document object from report data
-const docx = window.docx;
+
 function buildDocxReport({ project, stages, delays, lessons, totalProgress, projectStatus, executiveSummary }) {
+    const docx = window.docx;
     const { Document, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType, BorderStyle, ShadingType } = docx;
 
     // Color constants
