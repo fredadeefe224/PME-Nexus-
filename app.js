@@ -1084,16 +1084,16 @@ function renderCompletedProjectsTable(projects) {
             // Report exists — show Download + Regenerate buttons
             reportBtns = `
                 <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center;">
-                    <button class="btn-download-report" onclick="downloadProjectReport('${p.id}')">
+                    <button class="btn-download-report" onclick="downloadProjectReport('${p.id}', this)">
                         <i data-lucide="download"></i> Download
                     </button>
-                    <button class="btn-download-report btn-generate" onclick="generateAndDownloadReport('${p.id}')" title="Regenerate report with latest data">
+                    <button class="btn-download-report btn-generate" onclick="generateAndDownloadReport('${p.id}', this)" title="Regenerate report with latest data">
                         <i data-lucide="refresh-cw"></i>
                     </button>
                 </div>`;
         } else {
             // No report yet — show Generate & Download button
-            reportBtns = `<button class="btn-download-report btn-generate" onclick="generateAndDownloadReport('${p.id}')">
+            reportBtns = `<button class="btn-download-report btn-generate" onclick="generateAndDownloadReport('${p.id}', this)">
                 <i data-lucide="file-text"></i> Generate &amp; Download
             </button>`;
         }
@@ -1208,7 +1208,7 @@ function renderInProgressProjectsTable(projects) {
 // --- Projects Tab: Report Generation & Download ---
 
 // Download an already-generated report for a project
-async function downloadProjectReport(projectId) {
+async function downloadProjectReport(projectId, btn) {
     if (!currentUser) {
         showToast('Please log in to download reports.', 'error');
         return;
@@ -1242,46 +1242,54 @@ async function downloadProjectReport(projectId) {
 
     stages.sort((a, b) => new Date(a.plannedStart) - new Date(b.plannedStart));
 
-    // --- AI Enhancement: fetch polished executive summary from backend ---
-    const clickedBtn = event?.target?.closest?.('button') || document.querySelector(`[onclick*="downloadProjectReport('${projectId}')"]`);
-    if (clickedBtn) { clickedBtn.disabled = true; clickedBtn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Enhancing...'; lucide.createIcons(); }
+    // Disable button for entire operation (AI fetch + docx build + download)
+    const originalLabel = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Enhancing...'; lucide.createIcons(); }
 
     try {
-        const aiRes = await fetch(`${API_BASE}/api/enhance-report`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                projectName: project.name,
-                projectDescription: project.description || '',
-                projectStatus,
-                totalProgress,
-                stages: stages.map(s => ({ name: s.name, status: s.status, progress: s.progress, plannedStart: s.plannedStart, plannedEnd: s.plannedEnd, actualStart: s.actualStart, actualEnd: s.actualEnd })),
-                delays: delays.map(d => ({ stageId: d.stageId, reason: d.reason, impact: d.impact })),
-                lessons: lessons.map(l => ({ stageId: l.stageId, lessonDesc: l.lessonDesc, recommendation: l.recommendation }))
-            })
-        });
-        const aiData = await aiRes.json();
-        if (aiData.success && aiData.aiText) {
-            executiveSummary = aiData.aiText;
+        // --- AI Enhancement: fetch polished executive summary from backend ---
+        try {
+            const aiRes = await fetch(`${API_BASE}/api/enhance-report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectName: project.name,
+                    projectDescription: project.description || '',
+                    projectStatus,
+                    totalProgress,
+                    stages: stages.map(s => ({ name: s.name, status: s.status, progress: s.progress, plannedStart: s.plannedStart, plannedEnd: s.plannedEnd, actualStart: s.actualStart, actualEnd: s.actualEnd })),
+                    delays: delays.map(d => ({ stageId: d.stageId, reason: d.reason, impact: d.impact })),
+                    lessons: lessons.map(l => ({ stageId: l.stageId, lessonDesc: l.lessonDesc, recommendation: l.recommendation }))
+                })
+            });
+            const aiData = await aiRes.json();
+            if (aiData.success && aiData.aiText) {
+                executiveSummary = aiData.aiText;
+            }
+        } catch (aiErr) {
+            console.warn('[AI ENHANCE] Fallback to raw summary:', aiErr.message);
         }
-    } catch (aiErr) {
-        console.warn('[AI ENHANCE] Fallback to raw summary:', aiErr.message);
+
+        if (btn) { btn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Generating...'; lucide.createIcons(); }
+
+        const doc = buildDocxReport({
+            project, stages, delays, lessons,
+            totalProgress, projectStatus, executiveSummary
+        });
+
+        const fileName = `Project_Report_${(project?.name || 'Report').replace(/\s+/g, '_')}.docx`;
+        await triggerDocxDownload(doc, fileName);
+        showToast('Report downloaded successfully.', 'success');
+    } catch (err) {
+        console.error('[DOWNLOAD ERROR]', err);
+        showToast('Failed to generate report. Please try again.', 'error');
     } finally {
-        if (clickedBtn) { clickedBtn.disabled = false; clickedBtn.innerHTML = '<i data-lucide="download"></i> Download'; lucide.createIcons(); }
+        if (btn) { btn.disabled = false; btn.innerHTML = originalLabel || '<i data-lucide="download"></i> Download'; lucide.createIcons(); }
     }
-
-    const doc = buildDocxReport({
-        project, stages, delays, lessons,
-        totalProgress, projectStatus, executiveSummary
-    });
-
-    const fileName = `Project_Report_${(project?.name || 'Report').replace(/\s+/g, '_')}.docx`;
-    await triggerDocxDownload(doc, fileName);
-    showToast('Report downloaded successfully.', 'success');
 }
 
 // Generate a fresh report for a project and immediately download it
-async function generateAndDownloadReport(projectId) {
+async function generateAndDownloadReport(projectId, btn) {
     if (!currentUser) {
         showToast('Please log in to generate reports.', 'error');
         return;
@@ -1322,74 +1330,78 @@ async function generateAndDownloadReport(projectId) {
 
     stages.sort((a, b) => new Date(a.plannedStart) - new Date(b.plannedStart));
 
-    // --- AI Enhancement: fetch polished executive summary from backend ---
-    const clickedBtn = event?.target?.closest?.('button') || document.querySelector(`[onclick*="generateAndDownloadReport('${projectId}')"]`);
-    if (clickedBtn) { clickedBtn.disabled = true; clickedBtn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Enhancing...'; lucide.createIcons(); }
+    // Disable button for entire operation (AI fetch + docx build + download)
+    const originalLabel = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Enhancing...'; lucide.createIcons(); }
 
     try {
-        const aiRes = await fetch(`${API_BASE}/api/enhance-report`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                projectName: project.name,
-                projectDescription: project.description || '',
-                projectStatus,
-                totalProgress,
-                stages: stages.map(s => ({ name: s.name, status: s.status, progress: s.progress, plannedStart: s.plannedStart, plannedEnd: s.plannedEnd, actualStart: s.actualStart, actualEnd: s.actualEnd })),
-                delays: delays.map(d => ({ stageId: d.stageId, reason: d.reason, impact: d.impact })),
-                lessons: lessons.map(l => ({ stageId: l.stageId, lessonDesc: l.lessonDesc, recommendation: l.recommendation }))
-            })
+        // --- AI Enhancement: fetch polished executive summary from backend ---
+        try {
+            const aiRes = await fetch(`${API_BASE}/api/enhance-report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectName: project.name,
+                    projectDescription: project.description || '',
+                    projectStatus,
+                    totalProgress,
+                    stages: stages.map(s => ({ name: s.name, status: s.status, progress: s.progress, plannedStart: s.plannedStart, plannedEnd: s.plannedEnd, actualStart: s.actualStart, actualEnd: s.actualEnd })),
+                    delays: delays.map(d => ({ stageId: d.stageId, reason: d.reason, impact: d.impact })),
+                    lessons: lessons.map(l => ({ stageId: l.stageId, lessonDesc: l.lessonDesc, recommendation: l.recommendation }))
+                })
+            });
+            const aiData = await aiRes.json();
+            if (aiData.success && aiData.aiText) {
+                executiveSummary = aiData.aiText;
+            }
+        } catch (aiErr) {
+            console.warn('[AI ENHANCE] Fallback to raw summary:', aiErr.message);
+        }
+
+        if (btn) { btn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Generating...'; lucide.createIcons(); }
+
+        // Build a real .docx document using the docx library
+        const doc = buildDocxReport({
+            project, stages, delays, lessons,
+            totalProgress, projectStatus, executiveSummary
         });
-        const aiData = await aiRes.json();
-        if (aiData.success && aiData.aiText) {
-            executiveSummary = aiData.aiText;
+
+        // Save report metadata to DB (structured data, not HTML)
+        const newReport = {
+            id: Date.now().toString(),
+            projectId: projectId,
+            currentStageStatus: projectStatus,
+            overallProgress: totalProgress,
+            executiveSummary: executiveSummary,
+            keyDelaysSummary: numDelays > 0 ? `${numDelays} delay(s) recorded` : 'No delays recorded',
+            lessonsLearnedSummary: lessons.length > 0 ? `${lessons.length} lesson(s) recorded` : 'No lessons recorded',
+            content: '__docx__', // marker indicating this is a docx-format report
+            createdAt: new Date().toISOString()
+        };
+
+        let reports = DB.get('projectReports') || [];
+        const existingIndex = reports.findIndex(r => r.projectId === projectId);
+        if (existingIndex !== -1) {
+            reports[existingIndex] = { ...reports[existingIndex], ...newReport };
+        } else {
+            reports.push(newReport);
         }
-    } catch (aiErr) {
-        console.warn('[AI ENHANCE] Fallback to raw summary:', aiErr.message);
+        DB.set('projectReports', reports);
+
+        // Trigger download
+        const fileName = `Project_Report_${project.name.replace(/\s+/g, '_')}.docx`;
+        await triggerDocxDownload(doc, fileName);
+
+        showToast('Report generated and downloaded.', 'success');
+
+        // Refresh the completed projects table to show updated button states
+        renderProjectsTab();
+    } catch (err) {
+        console.error('[GENERATE ERROR]', err);
+        showToast('Failed to generate report. Please try again.', 'error');
     } finally {
-        if (clickedBtn) {
-            clickedBtn.disabled = false;
-            clickedBtn.innerHTML = '<i data-lucide="file-text"></i> Generate & Download';
-            lucide.createIcons();
-        }
+        if (btn) { btn.disabled = false; btn.innerHTML = originalLabel || '<i data-lucide="file-text"></i> Generate & Download'; lucide.createIcons(); }
     }
-
-    // Build a real .docx document using the docx library
-    const doc = buildDocxReport({
-        project, stages, delays, lessons,
-        totalProgress, projectStatus, executiveSummary
-    });
-
-    // Save report metadata to DB (structured data, not HTML)
-    const newReport = {
-        id: Date.now().toString(),
-        projectId: projectId,
-        currentStageStatus: projectStatus,
-        overallProgress: totalProgress,
-        executiveSummary: executiveSummary,
-        keyDelaysSummary: numDelays > 0 ? `${numDelays} delay(s) recorded` : 'No delays recorded',
-        lessonsLearnedSummary: lessons.length > 0 ? `${lessons.length} lesson(s) recorded` : 'No lessons recorded',
-        content: '__docx__', // marker indicating this is a docx-format report
-        createdAt: new Date().toISOString()
-    };
-
-    let reports = DB.get('projectReports') || [];
-    const existingIndex = reports.findIndex(r => r.projectId === projectId);
-    if (existingIndex !== -1) {
-        reports[existingIndex] = { ...reports[existingIndex], ...newReport };
-    } else {
-        reports.push(newReport);
-    }
-    DB.set('projectReports', reports);
-
-    // Trigger download
-    const fileName = `Project_Report_${project.name.replace(/\s+/g, '_')}.docx`;
-    await triggerDocxDownload(doc, fileName);
-
-    showToast('Report generated and downloaded.', 'success');
-
-    // Refresh the completed projects table to show updated button states
-    renderProjectsTab();
 }
 
 // Helper: Builds a docx.Document object from report data
@@ -1978,7 +1990,7 @@ function updateReportUI() {
         dlBtn.download = `Project_Report_${project.name.replace(/\s+/g, '_')}.docx`;
         dlBtn.onclick = (e) => {
             e.preventDefault();
-            downloadProjectReport(currentProjectId);
+            downloadProjectReport(currentProjectId, dlBtn);
         };
     } else {
         reportStatus.textContent = 'Report: Pending';
