@@ -1846,3 +1846,26 @@ textarea:focus {
         width: 100%;
     }
 }
+
+/* ============================================================
+   AI Enhancement — Spinner for report buttons
+   ============================================================ */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.spin-icon {
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
+.btn-download-report:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}

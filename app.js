@@ -1208,7 +1208,7 @@ function renderInProgressProjectsTable(projects) {
 // --- Projects Tab: Report Generation & Download ---
 
 // Download an already-generated report for a project
-function downloadProjectReport(projectId) {
+async function downloadProjectReport(projectId) {
     if (!currentUser) {
         showToast('Please log in to download reports.', 'error');
         return;
@@ -1220,20 +1220,68 @@ function downloadProjectReport(projectId) {
 
     const reports = DB.get('projectReports') || [];
     const report = reports.find(r => r.projectId === projectId);
-    if (!report || !report.content) {
+    if (!report) {
         showToast('No report found. Please generate one first.', 'error');
         return;
     }
 
+    // Re-build the .docx from current data for download
     const project = DB.get('projects').find(p => p.id === projectId);
-    const fileName = `Project_Report_${(project?.name || 'Report').replace(/\s+/g, '_')}.doc`;
+    if (!project) {
+        showToast('Project not found.', 'error');
+        return;
+    }
 
-    triggerWordDocDownload(report.content, fileName);
+    const stages = DB.get('stages').filter(s => s.projectId === projectId);
+    const delays = DB.get('delayRecords').filter(d => d.projectId === projectId);
+    const lessons = DB.get('lessonsLearned').filter(l => l.projectId === projectId);
+
+    let totalProgress = stages.length ? Math.round(stages.reduce((sum, s) => sum + parseInt(s.progress), 0) / stages.length) : 0;
+    let projectStatus = report.currentStageStatus || 'On Track';
+    let executiveSummary = report.executiveSummary || `Project "${project.name}" report.`;
+
+    stages.sort((a, b) => new Date(a.plannedStart) - new Date(b.plannedStart));
+
+    // --- AI Enhancement: fetch polished executive summary from backend ---
+    const clickedBtn = event?.target?.closest?.('button') || document.querySelector(`[onclick*="downloadProjectReport('${projectId}')"]`);
+    if (clickedBtn) { clickedBtn.disabled = true; clickedBtn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Enhancing...'; lucide.createIcons(); }
+
+    try {
+        const aiRes = await fetch(`${API_BASE}/api/enhance-report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                projectName: project.name,
+                projectDescription: project.description || '',
+                projectStatus,
+                totalProgress,
+                stages: stages.map(s => ({ name: s.name, status: s.status, progress: s.progress, plannedStart: s.plannedStart, plannedEnd: s.plannedEnd, actualStart: s.actualStart, actualEnd: s.actualEnd })),
+                delays: delays.map(d => ({ stageId: d.stageId, reason: d.reason, impact: d.impact })),
+                lessons: lessons.map(l => ({ stageId: l.stageId, lessonDesc: l.lessonDesc, recommendation: l.recommendation }))
+            })
+        });
+        const aiData = await aiRes.json();
+        if (aiData.success && aiData.aiText) {
+            executiveSummary = aiData.aiText;
+        }
+    } catch (aiErr) {
+        console.warn('[AI ENHANCE] Fallback to raw summary:', aiErr.message);
+    } finally {
+        if (clickedBtn) { clickedBtn.disabled = false; clickedBtn.innerHTML = '<i data-lucide="download"></i> Download'; lucide.createIcons(); }
+    }
+
+    const doc = buildDocxReport({
+        project, stages, delays, lessons,
+        totalProgress, projectStatus, executiveSummary
+    });
+
+    const fileName = `Project_Report_${(project?.name || 'Report').replace(/\s+/g, '_')}.docx`;
+    await triggerDocxDownload(doc, fileName);
     showToast('Report downloaded successfully.', 'success');
 }
 
 // Generate a fresh report for a project and immediately download it
-function generateAndDownloadReport(projectId) {
+async function generateAndDownloadReport(projectId) {
     if (!currentUser) {
         showToast('Please log in to generate reports.', 'error');
         return;
@@ -1274,115 +1322,45 @@ function generateAndDownloadReport(projectId) {
 
     stages.sort((a, b) => new Date(a.plannedStart) - new Date(b.plannedStart));
 
-    // Build Word-compatible HTML — same template as handleGenerateReport
-    let wordHtml = `
-    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-    <head>
-        <meta charset='utf-8'>
-        <title>Project Report - ${project.name}</title>
-        <style>
-            body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; }
-            h1 { color: #2c3e50; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
-            h2 { color: #34495e; margin-top: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            th, td { border: 1px solid #bdc3c7; padding: 8px; text-align: left; }
-            th { background-color: #ecf0f1; font-weight: bold; }
-            .behind-schedule { color: #e74c3c; font-weight: bold; }
-            .on-track { color: #27ae60; }
-            .completed { color: #2980b9; }
-            .meta-info { margin-bottom: 20px; font-size: 14px; color: #7f8c8d; text-align: right; }
-        </style>
-    </head>
-    <body>
-        <h1>PROJECT REPORT: ${project.name}</h1>
-        <div class="meta-info">Generated At: ${new Date().toLocaleString()}</div>
+    // --- AI Enhancement: fetch polished executive summary from backend ---
+    const clickedBtn = event?.target?.closest?.('button') || document.querySelector(`[onclick*="generateAndDownloadReport('${projectId}')"]`);
+    if (clickedBtn) { clickedBtn.disabled = true; clickedBtn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Enhancing...'; lucide.createIcons(); }
 
-        <h2>1. EXECUTIVE SUMMARY</h2>
-        <p>${executiveSummary}</p>
+    try {
+        const aiRes = await fetch(`${API_BASE}/api/enhance-report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                projectName: project.name,
+                projectDescription: project.description || '',
+                projectStatus,
+                totalProgress,
+                stages: stages.map(s => ({ name: s.name, status: s.status, progress: s.progress, plannedStart: s.plannedStart, plannedEnd: s.plannedEnd, actualStart: s.actualStart, actualEnd: s.actualEnd })),
+                delays: delays.map(d => ({ stageId: d.stageId, reason: d.reason, impact: d.impact })),
+                lessons: lessons.map(l => ({ stageId: l.stageId, lessonDesc: l.lessonDesc, recommendation: l.recommendation }))
+            })
+        });
+        const aiData = await aiRes.json();
+        if (aiData.success && aiData.aiText) {
+            executiveSummary = aiData.aiText;
+        }
+    } catch (aiErr) {
+        console.warn('[AI ENHANCE] Fallback to raw summary:', aiErr.message);
+    } finally {
+        if (clickedBtn) {
+            clickedBtn.disabled = false;
+            clickedBtn.innerHTML = '<i data-lucide="file-text"></i> Generate & Download';
+            lucide.createIcons();
+        }
+    }
 
-        <h2>2. PROJECT OVERVIEW</h2>
-        <ul>
-            <li><strong>Name:</strong> ${project.name}</li>
-            <li><strong>Project ID:</strong> ${project.id}</li>
-            <li><strong>Description:</strong> ${project.description || 'N/A'}</li>
-            <li><strong>Creation Date:</strong> ${new Date(project.createdAt).toLocaleDateString()}</li>
-            <li><strong>Total Stages:</strong> ${stages.length}</li>
-            <li><strong>Overall Progress:</strong> ${totalProgress}%</li>
-            <li><strong>Current Status:</strong> ${projectStatus}</li>
-            ${project.completionDate ? `<li><strong>Completion Date:</strong> ${new Date(project.completionDate).toLocaleDateString()}</li>` : ''}
-        </ul>
-
-        <h2>3. STAGE-BY-STAGE PERFORMANCE</h2>
-        <table>
-            <tr>
-                <th>Stage Name</th>
-                <th>Planned Start / End</th>
-                <th>Actual Start / End</th>
-                <th>Progress</th>
-                <th>Status</th>
-            </tr>`;
-
-    stages.forEach(s => {
-        let statusClass = '';
-        if (s.status === 'Behind Schedule') statusClass = 'behind-schedule';
-        else if (s.status === 'Completed') statusClass = 'completed';
-        else statusClass = 'on-track';
-
-        wordHtml += `
-            <tr>
-                <td>${s.name}</td>
-                <td>${s.plannedStart} to ${s.plannedEnd}</td>
-                <td>${s.actualStart || 'TBD'} to ${s.actualEnd || 'TBD'}</td>
-                <td>${s.progress}%</td>
-                <td class="${statusClass}">${s.status}</td>
-            </tr>`;
+    // Build a real .docx document using the docx library
+    const doc = buildDocxReport({
+        project, stages, delays, lessons,
+        totalProgress, projectStatus, executiveSummary
     });
 
-    wordHtml += `
-        </table>
-
-        <h2>4. DELAY REASONS</h2>`;
-
-    if (delays.length === 0) {
-        wordHtml += "<p>No delays logged.</p>";
-    } else {
-        wordHtml += "<ul>";
-        delays.forEach(d => {
-            const stageName = stages.find(s => s.id === d.stageId)?.name || 'Unknown Stage';
-            wordHtml += `
-            <li>
-                <strong>Stage:</strong> ${stageName}<br>
-                <strong>Reason:</strong> ${d.reason}<br>
-                <strong>Impact:</strong> ${d.impact}
-            </li>`;
-        });
-        wordHtml += "</ul>";
-    }
-
-    wordHtml += `
-        <h2>5. LESSONS LEARNED</h2>`;
-
-    if (lessons.length === 0) {
-        wordHtml += "<p>No lessons logged.</p>";
-    } else {
-        wordHtml += "<ul>";
-        lessons.forEach(l => {
-            const stageName = l.stageId ? (stages.find(s => s.id === l.stageId)?.name || 'Unknown Stage') : 'General Project';
-            wordHtml += `
-            <li>
-                <strong>${stageName}</strong><br>
-                <strong>Description:</strong> ${l.lessonDesc}<br>
-                <strong>Recommendation:</strong> ${l.recommendation}
-            </li>`;
-        });
-        wordHtml += "</ul>";
-    }
-
-    wordHtml += `
-    </body>
-    </html>`;
-
-    // Save report to DB (update or create)
+    // Save report metadata to DB (structured data, not HTML)
     const newReport = {
         id: Date.now().toString(),
         projectId: projectId,
@@ -1391,7 +1369,7 @@ function generateAndDownloadReport(projectId) {
         executiveSummary: executiveSummary,
         keyDelaysSummary: numDelays > 0 ? `${numDelays} delay(s) recorded` : 'No delays recorded',
         lessonsLearnedSummary: lessons.length > 0 ? `${lessons.length} lesson(s) recorded` : 'No lessons recorded',
-        content: wordHtml,
+        content: '__docx__', // marker indicating this is a docx-format report
         createdAt: new Date().toISOString()
     };
 
@@ -1405,8 +1383,8 @@ function generateAndDownloadReport(projectId) {
     DB.set('projectReports', reports);
 
     // Trigger download
-    const fileName = `Project_Report_${project.name.replace(/\s+/g, '_')}.doc`;
-    triggerWordDocDownload(wordHtml, fileName);
+    const fileName = `Project_Report_${project.name.replace(/\s+/g, '_')}.docx`;
+    await triggerDocxDownload(doc, fileName);
 
     showToast('Report generated and downloaded.', 'success');
 
@@ -1414,17 +1392,157 @@ function generateAndDownloadReport(projectId) {
     renderProjectsTab();
 }
 
-// Trigger browser download of a Word-compatible HTML document
-function triggerWordDocDownload(htmlContent, fileName) {
-    const blob = new Blob([htmlContent], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+// Helper: Builds a docx.Document object from report data
+function buildDocxReport({ project, stages, delays, lessons, totalProgress, projectStatus, executiveSummary }) {
+    const { Document, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType, BorderStyle, ShadingType } = docx;
+
+    // Color constants
+    const BLUE_HEADER = '2c3e50';
+    const BLUE_ACCENT = '3498db';
+    const GREEN = '27ae60';
+    const RED = 'e74c3c';
+    const DARK_GREY = '333333';
+    const LIGHT_BG = 'ecf0f1';
+
+    function statusColor(status) {
+        if (status === 'Behind Schedule') return RED;
+        if (status === 'Completed') return '2980b9';
+        return GREEN;
+    }
+
+    // Build stage performance table rows
+    const stageTableRows = [
+        new TableRow({
+            tableHeader: true,
+            children: ['Stage Name', 'Planned Start / End', 'Actual Start / End', 'Progress', 'Status'].map(text =>
+                new TableCell({
+                    shading: { type: ShadingType.SOLID, color: LIGHT_BG },
+                    children: [new Paragraph({ children: [new TextRun({ text, bold: true, font: 'Arial', size: 20, color: DARK_GREY })] })],
+                })
+            ),
+        }),
+        ...stages.map(s => new TableRow({
+            children: [
+                new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: s.name, font: 'Arial', size: 20 })] })] }),
+                new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${s.plannedStart} to ${s.plannedEnd}`, font: 'Arial', size: 20 })] })] }),
+                new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${s.actualStart || 'TBD'} to ${s.actualEnd || 'TBD'}`, font: 'Arial', size: 20 })] })] }),
+                new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${s.progress}%`, font: 'Arial', size: 20 })] })] }),
+                new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: s.status, bold: true, font: 'Arial', size: 20, color: statusColor(s.status) })] })] }),
+            ]
+        }))
+    ];
+
+    // Build delay paragraphs
+    const delayParagraphs = delays.length === 0
+        ? [new Paragraph({ children: [new TextRun({ text: 'No delays logged.', font: 'Arial', size: 22, italics: true, color: '7f8c8d' })] })]
+        : delays.map(d => {
+            const stageName = stages.find(s => s.id === d.stageId)?.name || 'Unknown Stage';
+            return new Paragraph({
+                bullet: { level: 0 },
+                spacing: { after: 120 },
+                children: [
+                    new TextRun({ text: 'Stage: ', bold: true, font: 'Arial', size: 22 }),
+                    new TextRun({ text: stageName, font: 'Arial', size: 22 }),
+                    new TextRun({ text: '\nReason: ', bold: true, font: 'Arial', size: 22, break: 1 }),
+                    new TextRun({ text: d.reason, font: 'Arial', size: 22 }),
+                    new TextRun({ text: '\nImpact: ', bold: true, font: 'Arial', size: 22, break: 1 }),
+                    new TextRun({ text: d.impact, font: 'Arial', size: 22 }),
+                ]
+            });
+        });
+
+    // Build lessons paragraphs
+    const lessonParagraphs = lessons.length === 0
+        ? [new Paragraph({ children: [new TextRun({ text: 'No lessons logged.', font: 'Arial', size: 22, italics: true, color: '7f8c8d' })] })]
+        : lessons.map(l => {
+            const stageName = l.stageId ? (stages.find(s => s.id === l.stageId)?.name || 'Unknown Stage') : 'General Project';
+            return new Paragraph({
+                bullet: { level: 0 },
+                spacing: { after: 120 },
+                children: [
+                    new TextRun({ text: stageName, bold: true, font: 'Arial', size: 22 }),
+                    new TextRun({ text: '\nDescription: ', bold: true, font: 'Arial', size: 22, break: 1 }),
+                    new TextRun({ text: l.lessonDesc, font: 'Arial', size: 22 }),
+                    new TextRun({ text: '\nRecommendation: ', bold: true, font: 'Arial', size: 22, break: 1 }),
+                    new TextRun({ text: l.recommendation, font: 'Arial', size: 22 }),
+                ]
+            });
+        });
+
+    // Build overview bullet points
+    const overviewItems = [
+        { label: 'Name', value: project.name },
+        { label: 'Project ID', value: project.id },
+        { label: 'Description', value: project.description || 'N/A' },
+        { label: 'Creation Date', value: new Date(project.createdAt).toLocaleDateString() },
+        { label: 'Total Stages', value: String(stages.length) },
+        { label: 'Overall Progress', value: `${totalProgress}%` },
+        { label: 'Current Status', value: projectStatus },
+    ];
+    if (project.completionDate) {
+        overviewItems.push({ label: 'Completion Date', value: new Date(project.completionDate).toLocaleDateString() });
+    }
+
+    const overviewParagraphs = overviewItems.map(item => new Paragraph({
+        bullet: { level: 0 },
+        spacing: { after: 60 },
+        children: [
+            new TextRun({ text: `${item.label}: `, bold: true, font: 'Arial', size: 22 }),
+            new TextRun({ text: item.value, font: 'Arial', size: 22 }),
+        ]
+    }));
+
+    return new Document({
+        styles: {
+            default: {
+                document: {
+                    run: { font: 'Arial', size: 22, color: DARK_GREY },
+                    paragraph: { spacing: { line: 360 } }
+                }
+            }
+        },
+        sections: [{
+            children: [
+                // Title
+                new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 200 },
+                    border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: BLUE_ACCENT } },
+                    children: [new TextRun({ text: `PROJECT REPORT: ${project.name}`, bold: true, font: 'Arial', size: 32, color: BLUE_HEADER })],
+                }),
+                // Generated timestamp
+                new Paragraph({
+                    alignment: AlignmentType.RIGHT,
+                    spacing: { after: 300 },
+                    children: [new TextRun({ text: `Generated At: ${new Date().toLocaleString()}`, font: 'Arial', size: 18, color: '7f8c8d' })],
+                }),
+                // 1. Executive Summary
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '1. EXECUTIVE SUMMARY', bold: true, font: 'Arial', color: '34495e' })] }),
+                new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: executiveSummary, font: 'Arial', size: 22 })] }),
+                // 2. Project Overview
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '2. PROJECT OVERVIEW', bold: true, font: 'Arial', color: '34495e' })] }),
+                ...overviewParagraphs,
+                // 3. Stage-by-Stage Performance
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '3. STAGE-BY-STAGE PERFORMANCE', bold: true, font: 'Arial', color: '34495e' })] }),
+                new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: stageTableRows,
+                }),
+                // 4. Delay Reasons
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '4. DELAY REASONS', bold: true, font: 'Arial', color: '34495e' })] }),
+                ...delayParagraphs,
+                // 5. Lessons Learned
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '5. LESSONS LEARNED', bold: true, font: 'Arial', color: '34495e' })] }),
+                ...lessonParagraphs,
+            ]
+        }]
+    });
+}
+
+// Trigger browser download of a real .docx document using the docx library
+async function triggerDocxDownload(docObject, fileName) {
+    const blob = await docx.Packer.toBlob(docObject);
+    saveAs(blob, fileName);
 }
 
 function openProjectDetail(projectId) {
@@ -1855,12 +1973,12 @@ function updateReportUI() {
         reportStatus.textContent = `Report: Generated (${new Date(report.createdAt).toLocaleDateString()})`;
         reportStatus.style.color = 'var(--success)';
         dlBtn.style.display = 'flex';
-        // Use Blob-based download for reliability with large documents
+        // Use docx-based download
         dlBtn.href = '#';
-        dlBtn.download = `Project_Report_${project.name.replace(/\s+/g, '_')}.doc`;
+        dlBtn.download = `Project_Report_${project.name.replace(/\s+/g, '_')}.docx`;
         dlBtn.onclick = (e) => {
             e.preventDefault();
-            triggerWordDocDownload(report.content, `Project_Report_${project.name.replace(/\s+/g, '_')}.doc`);
+            downloadProjectReport(currentProjectId);
         };
     } else {
         reportStatus.textContent = 'Report: Pending';
@@ -1897,112 +2015,6 @@ function handleGenerateReport() {
 
     stages.sort((a, b) => new Date(a.plannedStart) - new Date(b.plannedStart));
 
-    // Constructing an HTML payload that MS Word can interpret
-    let wordHtml = `
-    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-    <head>
-        <meta charset='utf-8'>
-        <title>Project Report - ${project.name}</title>
-        <style>
-            body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; }
-            h1 { color: #2c3e50; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
-            h2 { color: #34495e; margin-top: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            th, td { border: 1px solid #bdc3c7; padding: 8px; text-align: left; }
-            th { background-color: #ecf0f1; font-weight: bold; }
-            .behind-schedule { color: #e74c3c; font-weight: bold; }
-            .on-track { color: #27ae60; }
-            .completed { color: #2980b9; }
-            .meta-info { margin-bottom: 20px; font-size: 14px; color: #7f8c8d; text-align: right; }
-        </style>
-    </head>
-    <body>
-        <h1>PROJECT REPORT: ${project.name}</h1>
-        <div class="meta-info">Generated At: ${new Date().toLocaleString()}</div>
-
-        <h2>1. EXECUTIVE SUMMARY</h2>
-        <p>${executiveSummary}</p>
-
-        <h2>2. PROJECT OVERVIEW</h2>
-        <ul>
-            <li><strong>Name:</strong> ${project.name}</li>
-            <li><strong>Description:</strong> ${project.description || 'N/A'}</li>
-            <li><strong>Creation Date:</strong> ${new Date(project.createdAt).toLocaleDateString()}</li>
-            <li><strong>Total Stages:</strong> ${stages.length}</li>
-            <li><strong>Overall Progress:</strong> ${totalProgress}%</li>
-            <li><strong>Current Status:</strong> ${projectStatus}</li>
-        </ul>
-
-        <h2>3. STAGE-BY-STAGE PERFORMANCE</h2>
-        <table>
-            <tr>
-                <th>Stage Name</th>
-                <th>Planned Start / End</th>
-                <th>Actual Start / End</th>
-                <th>Progress</th>
-                <th>Status</th>
-            </tr>`;
-
-    stages.forEach(s => {
-        let statusClass = '';
-        if (s.status === 'Behind Schedule') statusClass = 'behind-schedule';
-        else if (s.status === 'Completed') statusClass = 'completed';
-        else statusClass = 'on-track';
-
-        wordHtml += `
-            <tr>
-                <td>${s.name}</td>
-                <td>${s.plannedStart} to ${s.plannedEnd}</td>
-                <td>${s.actualStart || 'TBD'} to ${s.actualEnd || 'TBD'}</td>
-                <td>${s.progress}%</td>
-                <td class="${statusClass}">${s.status}</td>
-            </tr>`;
-    });
-
-    wordHtml += `
-        </table>
-
-        <h2>4. DELAY REASONS</h2>`;
-
-    if (delays.length === 0) {
-        wordHtml += "<p>No delays logged.</p>";
-    } else {
-        wordHtml += "<ul>";
-        delays.forEach(d => {
-            const stageName = stages.find(s => s.id === d.stageId)?.name || 'Unknown Stage';
-            wordHtml += `
-            <li>
-                <strong>Stage:</strong> ${stageName}<br>
-                <strong>Reason:</strong> ${d.reason}<br>
-                <strong>Impact:</strong> ${d.impact}
-            </li>`;
-        });
-        wordHtml += "</ul>";
-    }
-
-    wordHtml += `
-        <h2>5. LESSONS LEARNED</h2>`;
-
-    if (lessons.length === 0) {
-        wordHtml += "<p>No lessons logged.</p>";
-    } else {
-        wordHtml += "<ul>";
-        lessons.forEach(l => {
-            const stageName = l.stageId ? (stages.find(s => s.id === l.stageId)?.name || 'Unknown Stage') : 'General Project';
-            wordHtml += `
-            <li>
-                <strong>${stageName}</strong><br>
-                <strong>Description:</strong> ${l.lessonDesc}<br>
-                <strong>Recommendation:</strong> ${l.recommendation}
-            </li>`;
-        });
-        wordHtml += "</ul>";
-    }
-
-    wordHtml += `
-    </body>
-    </html>`;
-
     const newReport = {
         id: Date.now().toString(),
         projectId: currentProjectId,
@@ -2011,7 +2023,7 @@ function handleGenerateReport() {
         executiveSummary: executiveSummary,
         keyDelaysSummary: numDelays > 0 ? `${numDelays} delay(s) recorded` : 'No delays recorded',
         lessonsLearnedSummary: lessons.length > 0 ? `${lessons.length} lesson(s) recorded` : 'No lessons recorded',
-        content: wordHtml,
+        content: '__docx__', // marker indicating this is a docx-format report
         createdAt: new Date().toISOString()
     };
 

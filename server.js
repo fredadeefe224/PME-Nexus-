@@ -11,6 +11,7 @@ const { MongoClient } = require('mongodb');
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI || '';
 const DB_NAME = process.env.DB_NAME || 'pme_nexus';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
 // All collection names (must match the keys in the old database.json structure)
 const COLLECTIONS = [
@@ -136,6 +137,87 @@ async function writeCollection(collectionName, data) {
 // ============================================================
 // Business logic helpers
 // ============================================================
+
+// --- Gemini AI Helper ---
+async function callGeminiAPI(reportData) {
+    const https = require('https');
+
+    const systemPrompt = `You are a senior Project Monitoring and Evaluation (PM&E) specialist. 
+You will receive raw project data including: project name, description, overall status, progress percentage, 
+stage-by-stage performance, delay records, and lessons learned.
+
+Your task is to produce a polished, professional Executive Summary suitable for a formal PM&E report. 
+The summary must:
+- Open with the project title and current status in a formal tone.
+- Provide a concise performance overview referencing the overall progress percentage.
+- Highlight any stages that are behind schedule, citing specific stage names and planned end dates.
+- Summarize delay root causes and their impacts if delay records exist.
+- Reference key lessons learned and recommendations if they exist.
+- Close with a forward-looking statement on risk mitigation or next steps.
+- Be between 150 and 350 words.
+- Use third-person, formal language appropriate for stakeholder distribution.
+- Do NOT use markdown formatting, bullet points, or headers — return flowing paragraph text only.`;
+
+    const userContent = JSON.stringify(reportData, null, 2);
+
+    const requestBody = JSON.stringify({
+        contents: [{
+            parts: [
+                { text: systemPrompt },
+                { text: `Here is the raw project data to enhance:\n\n${userContent}` }
+            ]
+        }],
+        generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 1024
+        }
+    });
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+    return new Promise((resolve, reject) => {
+        const parsedUrl = new URL(apiUrl);
+
+        const options = {
+            hostname: parsedUrl.hostname,
+            path: parsedUrl.pathname + parsedUrl.search,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(requestBody)
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+
+                    if (parsed.error) {
+                        reject(new Error(parsed.error.message || 'Gemini API error'));
+                        return;
+                    }
+
+                    const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) {
+                        reject(new Error('No text returned from Gemini API'));
+                        return;
+                    }
+
+                    resolve(text.trim());
+                } catch (e) {
+                    reject(new Error('Failed to parse Gemini response: ' + e.message));
+                }
+            });
+        });
+
+        req.on('error', (e) => reject(new Error('Gemini request failed: ' + e.message)));
+        req.write(requestBody);
+        req.end();
+    });
+}
 
 function isProjectCompleted(projectId, stages) {
     const projectStages = stages.filter(s => s.projectId === projectId);
@@ -611,6 +693,33 @@ const server = http.createServer(async (req, res) => {
             sendJSON(res, 200, { success: true, message: 'Document deleted', id: docId });
 
             // ==============================================================
+            // POST /api/enhance-report — AI-enhanced report via Gemini
+            // ==============================================================
+        } else if (pathname === '/api/enhance-report' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => body += chunk.toString());
+            req.on('end', async () => {
+                try {
+                    const reportData = JSON.parse(body);
+
+                    if (!GEMINI_API_KEY) {
+                        logRequest(req.method, pathname, 500);
+                        sendJSON(res, 500, { success: false, error: 'GEMINI_API_KEY is not configured on the server.' });
+                        return;
+                    }
+
+                    const aiText = await callGeminiAPI(reportData);
+
+                    logRequest(req.method, pathname, 200);
+                    sendJSON(res, 200, { success: true, aiText });
+                } catch (e) {
+                    console.error('[AI ENHANCE ERROR]', e.message);
+                    logRequest(req.method, pathname, 500);
+                    sendJSON(res, 500, { success: false, error: 'AI enhancement failed: ' + e.message });
+                }
+            });
+
+            // ==============================================================
             // 404 — Not found
             // ==============================================================
         } else {
@@ -655,6 +764,7 @@ async function startServer() {
         console.log('  GET  /api/documents             → List documents');
         console.log('  POST /api/documents             → Save document');
         console.log('  DELETE /api/documents?id=...     → Delete document');
+        console.log('  POST /api/enhance-report        → AI-enhanced report (Gemini)');
         console.log('');
         console.log('Waiting for requests...');
         console.log('');
