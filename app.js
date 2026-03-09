@@ -1351,6 +1351,8 @@ async function generateAndDownloadReport(projectId, btn) {
                 })
             });
             const aiData = await aiRes.json();
+            // 👉 ADDED LINE: Let's see exactly what the backend handed us!
+            console.log("THE SMOKING GUN:", aiData);
             if (aiData.success && aiData.aiText) {
                 executiveSummary = aiData.aiText;
             }
