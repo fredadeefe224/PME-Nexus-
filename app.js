@@ -1930,20 +1930,63 @@ function renderNotifications() {
         const readList = notifications.filter(n => n.read);
         const sortedList = [...unreadList, ...readList];
 
+        // Clear All Read button
+        if (readList.length > 0) {
+            const clearAllBtn = document.createElement('button');
+            clearAllBtn.textContent = 'Clear All Read';
+            clearAllBtn.style.cssText = 'background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; align-self: flex-end; transition: background 0.2s;';
+            clearAllBtn.addEventListener('mouseenter', () => { clearAllBtn.style.background = 'rgba(239,68,68,0.2)'; });
+            clearAllBtn.addEventListener('mouseleave', () => { clearAllBtn.style.background = 'rgba(239,68,68,0.1)'; });
+            clearAllBtn.addEventListener('click', () => {
+                const allNotifs = DB.get('notifications');
+                const remaining = allNotifs.filter(x => !(x.userId === currentUser.id && x.read));
+                DB.set('notifications', remaining);
+                renderNotifications();
+            });
+            container.appendChild(clearAllBtn);
+        }
+
         sortedList.forEach(n => {
             const el = document.createElement('div');
             el.style.padding = '1rem';
+            el.style.paddingRight = '2.5rem';
             el.style.background = n.read ? 'rgba(0,0,0,0.2)' : 'rgba(99, 102, 241, 0.1)';
             el.style.borderLeft = n.read ? '3px solid transparent' : '3px solid var(--primary)';
             el.style.borderRadius = '6px';
             el.style.cursor = 'pointer';
             el.style.fontSize = '0.9rem';
+            el.style.position = 'relative';
+            el.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
 
             el.innerHTML = `
                 <div style="font-weight: ${n.read ? '400' : '600'}; margin-bottom: 0.5rem; color: ${n.read ? 'var(--text-muted)' : 'var(--text-main)'}">${n.message}</div>
                 <div style="color: var(--text-muted); font-size: 0.8rem;">${new Date(n.createdAt).toLocaleString()}</div>
             `;
 
+            // Dismiss X button
+            const dismissBtn = document.createElement('button');
+            dismissBtn.innerHTML = '&times;';
+            dismissBtn.title = 'Dismiss notification';
+            dismissBtn.style.cssText = 'position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s, color 0.2s;';
+            dismissBtn.addEventListener('mouseenter', () => { dismissBtn.style.background = 'rgba(239,68,68,0.15)'; dismissBtn.style.color = 'var(--danger)'; });
+            dismissBtn.addEventListener('mouseleave', () => { dismissBtn.style.background = 'none'; dismissBtn.style.color = 'var(--text-muted)'; });
+            dismissBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Don't trigger the navigate-to-project click
+                // Mark as read and remove from DB
+                const allNotifs = DB.get('notifications');
+                const idx = allNotifs.findIndex(x => x.id === n.id);
+                if (idx !== -1) {
+                    allNotifs.splice(idx, 1);
+                    DB.set('notifications', allNotifs);
+                }
+                // Animate out then re-render
+                el.style.opacity = '0';
+                el.style.transform = 'translateX(30px)';
+                setTimeout(() => renderNotifications(), 300);
+            });
+            el.appendChild(dismissBtn);
+
+            // Click to mark read + navigate to project
             el.addEventListener('click', () => {
                 if (!n.read) {
                     const allNotifs = DB.get('notifications');
@@ -1963,6 +2006,7 @@ function renderNotifications() {
         });
     }
 }
+
 
 function handleSaveDelay(e) {
     e.preventDefault();
