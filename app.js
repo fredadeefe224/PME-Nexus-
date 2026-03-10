@@ -1265,19 +1265,23 @@ async function downloadProjectReport(projectId, btn) {
             const aiData = await aiRes.json();
             // 👉 ADDED LINE: Let's see exactly what the backend handed us!
             console.log("THE SMOKING GUN:", aiData);
-            // THE BULLETPROOF EXTRACTOR
+            // 👇 --- THE ULTIMATE EXTRACTOR --- 👇
             if (aiData && aiData.aiText) {
-                // If the backend sent { aiText: "..." }
                 executiveSummary = aiData.aiText;
             } else if (aiData && aiData.text) {
-                // If the backend sent { text: "..." }
                 executiveSummary = aiData.text;
+            } else if (aiData && aiData.candidates && aiData.candidates[0] && aiData.candidates[0].content) {
+                // If the backend sent the raw Google Gemini data payload!
+                executiveSummary = aiData.candidates[0].content.parts[0].text;
             } else if (typeof aiData === 'string') {
-                // If the backend just sent the raw string
                 executiveSummary = aiData;
             } else {
                 console.warn("AI responded, but couldn't find the text property inside:", aiData);
             }
+
+            // Let's prove we actually caught the text before building the document!
+            console.log("DID WE CATCH IT?", executiveSummary);
+            // 👆 --- THE ULTIMATE EXTRACTOR ENDS HERE --- 👆
         } catch (aiErr) {
             console.warn('[AI ENHANCE] Fallback to raw summary:', aiErr.message);
         }
