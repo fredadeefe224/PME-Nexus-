@@ -142,21 +142,32 @@ async function writeCollection(collectionName, data) {
 async function callGeminiAPI(reportData) {
     const https = require('https');
 
-    const systemPrompt = `You are a senior Project Monitoring and Evaluation (PM&E) specialist. 
-You will receive raw project data including: project name, description, overall status, progress percentage, 
-stage-by-stage performance, delay records, and lessons learned.
+    const systemPrompt = `You are a Senior Project Manager and Monitoring & Evaluation (M&E) Specialist with 20 years of experience writing formal project reports for government agencies and international organizations.
 
-Your task is to produce a polished, professional Executive Summary suitable for a formal PM&E report. 
-The summary must:
-- Open with the project title and current status in a formal tone.
-- Provide a concise performance overview referencing the overall progress percentage.
-- Highlight any stages that are behind schedule, citing specific stage names and planned end dates.
-- Summarize delay root causes and their impacts if delay records exist.
-- Reference key lessons learned and recommendations if they exist.
-- Close with a forward-looking statement on risk mitigation or next steps.
-- Be between 150 and 350 words.
-- Use third-person, formal language appropriate for stakeholder distribution.
-- Do NOT use markdown formatting, bullet points, or headers — return flowing paragraph text only.`;
+You will receive raw project data including: project name, description, overall status, progress percentage, stage-by-stage performance, delay records, and lessons learned.
+
+Your task is to analyze this data deeply and return a STRICTLY FORMATTED JSON OBJECT with exactly these 5 keys. Each value must be detailed, multi-paragraph flowing text written in third-person formal language suitable for stakeholder distribution.
+
+CRITICAL RULES:
+1. Return ONLY a valid JSON object — no markdown, no code fences, no explanation before or after.
+2. Each field must contain detailed, professional paragraphs (NOT summaries). Write expansively.
+3. Use newline characters (\\n\\n) to separate paragraphs within each field.
+4. Do NOT use markdown formatting, bullet points, numbered lists, or headers inside the values.
+5. Reference specific project data (stage names, dates, percentages) wherever relevant.
+
+The JSON object must have these exact keys:
+
+{
+  "executiveSummary": "A comprehensive 3-4 paragraph analysis of the project's current standing. Open with a formal status declaration citing the project name. Discuss overall progress with specific percentages. Analyze stage-level performance referencing individual stage names and their status. Close with a risk assessment and forward-looking statement.",
+
+  "projectOverview": "A detailed 2-3 paragraph deep dive into the project's scope, objectives, and overall progress trajectory. Discuss what the project aims to achieve, how many stages comprise the implementation plan, the timeline from earliest planned start to latest planned end, and how current progress compares to expectations.",
+
+  "delayAnalysis": "A thorough 2-4 paragraph professional analysis of all documented delays. For each delay, discuss the affected stage by name, the root cause, the downstream impact on the project timeline, and any cascading effects on dependent stages. If no delays exist, write a paragraph noting the project's strong adherence to schedule.",
+
+  "lessonsLearned": "A detailed 2-3 paragraph expanded write-up synthesizing all documented lessons. Group related lessons thematically, discuss their implications for current and future project phases, and connect each lesson to broader organizational learning. If no lessons exist, write about the importance of establishing a lessons-learned culture.",
+
+  "strategicSuggestions": "A comprehensive 3-4 paragraph section containing detailed, actionable recommendations and next steps. Cover risk mitigation strategies, resource optimization opportunities, stakeholder communication improvements, and schedule recovery plans where applicable. Each suggestion should be specific, measurable, and tied to the project data provided."
+}`;
 
     const userContent = JSON.stringify(reportData, null, 2);
 
@@ -164,12 +175,12 @@ The summary must:
         contents: [{
             parts: [
                 { text: systemPrompt },
-                { text: `Here is the raw project data to enhance:\n\n${userContent}` }
+                { text: `Here is the raw project data to analyze and enhance:\n\n${userContent}` }
             ]
         }],
         generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 1024
+            maxOutputTokens: 4096
         }
     });
 
@@ -200,13 +211,30 @@ The summary must:
                         return;
                     }
 
-                    const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (!text) {
+                    const rawText = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!rawText) {
                         reject(new Error('No text returned from Gemini API'));
                         return;
                     }
 
-                    resolve(text.trim());
+                    // Strip markdown code fences if Gemini wraps the JSON in ```json ... ```
+                    let cleaned = rawText.trim();
+                    if (cleaned.startsWith('```')) {
+                        cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?\s*```$/, '');
+                    }
+
+                    // Parse the JSON object from Gemini
+                    const aiReport = JSON.parse(cleaned);
+
+                    // Validate all required keys exist
+                    const requiredKeys = ['executiveSummary', 'projectOverview', 'delayAnalysis', 'lessonsLearned', 'strategicSuggestions'];
+                    for (const key of requiredKeys) {
+                        if (typeof aiReport[key] !== 'string') {
+                            aiReport[key] = aiReport[key] ? String(aiReport[key]) : '';
+                        }
+                    }
+
+                    resolve(aiReport);
                 } catch (e) {
                     reject(new Error('Failed to parse Gemini response: ' + e.message));
                 }
@@ -708,10 +736,10 @@ const server = http.createServer(async (req, res) => {
                         return;
                     }
 
-                    const aiText = await callGeminiAPI(reportData);
+                    const aiReport = await callGeminiAPI(reportData);
 
                     logRequest(req.method, pathname, 200);
-                    sendJSON(res, 200, { success: true, aiText });
+                    sendJSON(res, 200, { success: true, aiReport });
                 } catch (e) {
                     console.error('[AI ENHANCE ERROR]', e.message);
                     logRequest(req.method, pathname, 500);

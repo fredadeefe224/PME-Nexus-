@@ -1238,16 +1238,24 @@ async function downloadProjectReport(projectId, btn) {
 
     let totalProgress = stages.length ? Math.round(stages.reduce((sum, s) => sum + parseInt(s.progress), 0) / stages.length) : 0;
     let projectStatus = report.currentStageStatus || 'On Track';
-    let executiveSummary = report.executiveSummary || `Project "${project.name}" report.`;
 
     stages.sort((a, b) => new Date(a.plannedStart) - new Date(b.plannedStart));
+
+    // Raw fallback values for all 5 AI fields
+    let aiFields = {
+        executiveSummary: report.executiveSummary || `Project "${project.name}" is currently ${projectStatus}. Total average progress is ${totalProgress}%.`,
+        projectOverview: `${project.name} consists of ${stages.length} stage(s). ${project.description || 'No additional description provided.'}`,
+        delayAnalysis: delays.length > 0 ? delays.map(d => `Delay in stage ${d.stageId}: ${d.reason}. Impact: ${d.impact}`).join('\n\n') : 'No delays have been recorded for this project.',
+        lessonsLearned: lessons.length > 0 ? lessons.map(l => `${l.lessonDesc}. Recommendation: ${l.recommendation}`).join('\n\n') : 'No lessons learned have been recorded for this project.',
+        strategicSuggestions: 'No AI-generated strategic suggestions are available at this time.'
+    };
 
     // Disable button for entire operation (AI fetch + docx build + download)
     const originalLabel = btn ? btn.innerHTML : null;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Enhancing...'; lucide.createIcons(); }
 
     try {
-        // --- AI Enhancement: fetch polished executive summary from backend ---
+        // --- AI Enhancement: fetch all 5 enhanced fields from backend ---
         try {
             const aiRes = await fetch(`${API_BASE}/api/enhance-report`, {
                 method: 'POST',
@@ -1263,34 +1271,23 @@ async function downloadProjectReport(projectId, btn) {
                 })
             });
             const aiData = await aiRes.json();
-            // 👉 ADDED LINE: Let's see exactly what the backend handed us!
-            console.log("THE SMOKING GUN:", aiData);
-            // 👇 --- THE ULTIMATE EXTRACTOR --- 👇
-            if (aiData && aiData.aiText) {
-                executiveSummary = aiData.aiText;
-            } else if (aiData && aiData.text) {
-                executiveSummary = aiData.text;
-            } else if (aiData && aiData.candidates && aiData.candidates[0] && aiData.candidates[0].content) {
-                // If the backend sent the raw Google Gemini data payload!
-                executiveSummary = aiData.candidates[0].content.parts[0].text;
-            } else if (typeof aiData === 'string') {
-                executiveSummary = aiData;
-            } else {
-                console.warn("AI responded, but couldn't find the text property inside:", aiData);
+            if (aiData.success && aiData.aiReport) {
+                const r = aiData.aiReport;
+                if (r.executiveSummary) aiFields.executiveSummary = r.executiveSummary;
+                if (r.projectOverview) aiFields.projectOverview = r.projectOverview;
+                if (r.delayAnalysis) aiFields.delayAnalysis = r.delayAnalysis;
+                if (r.lessonsLearned) aiFields.lessonsLearned = r.lessonsLearned;
+                if (r.strategicSuggestions) aiFields.strategicSuggestions = r.strategicSuggestions;
             }
-
-            // Let's prove we actually caught the text before building the document!
-            console.log("DID WE CATCH IT?", executiveSummary);
-            // 👆 --- THE ULTIMATE EXTRACTOR ENDS HERE --- 👆
         } catch (aiErr) {
-            console.warn('[AI ENHANCE] Fallback to raw summary:', aiErr.message);
+            console.warn('[AI ENHANCE] Fallback to raw data:', aiErr.message);
         }
 
         if (btn) { btn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Generating...'; lucide.createIcons(); }
 
         const doc = buildDocxReport({
             project, stages, delays, lessons,
-            totalProgress, projectStatus, executiveSummary
+            totalProgress, projectStatus, ...aiFields
         });
 
         const fileName = `Project_Report_${(project?.name || 'Report').replace(/\s+/g, '_')}.docx`;
@@ -1342,16 +1339,24 @@ async function generateAndDownloadReport(projectId, btn) {
     }
 
     let numDelays = delays.length;
-    let executiveSummary = `Project "${project.name}" is currently ${projectStatus}. Total average progress is ${totalProgress}%. Delays logged to date: ${numDelays}. Lessons recorded to date: ${lessons.length}.`;
 
     stages.sort((a, b) => new Date(a.plannedStart) - new Date(b.plannedStart));
+
+    // Raw fallback values for all 5 AI fields
+    let aiFields = {
+        executiveSummary: `Project "${project.name}" is currently ${projectStatus}. Total average progress is ${totalProgress}%. Delays logged to date: ${numDelays}. Lessons recorded to date: ${lessons.length}.`,
+        projectOverview: `${project.name} consists of ${stages.length} stage(s). ${project.description || 'No additional description provided.'}`,
+        delayAnalysis: delays.length > 0 ? delays.map(d => `Delay in stage ${d.stageId}: ${d.reason}. Impact: ${d.impact}`).join('\n\n') : 'No delays have been recorded for this project.',
+        lessonsLearned: lessons.length > 0 ? lessons.map(l => `${l.lessonDesc}. Recommendation: ${l.recommendation}`).join('\n\n') : 'No lessons learned have been recorded for this project.',
+        strategicSuggestions: 'No AI-generated strategic suggestions are available at this time.'
+    };
 
     // Disable button for entire operation (AI fetch + docx build + download)
     const originalLabel = btn ? btn.innerHTML : null;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Enhancing...'; lucide.createIcons(); }
 
     try {
-        // --- AI Enhancement: fetch polished executive summary from backend ---
+        // --- AI Enhancement: fetch all 5 enhanced fields from backend ---
         try {
             const aiRes = await fetch(`${API_BASE}/api/enhance-report`, {
                 method: 'POST',
@@ -1367,13 +1372,16 @@ async function generateAndDownloadReport(projectId, btn) {
                 })
             });
             const aiData = await aiRes.json();
-            // 👉 ADDED LINE: Let's see exactly what the backend handed us!
-            console.log("THE SMOKING GUN:", aiData);
-            if (aiData.success && aiData.aiText) {
-                executiveSummary = aiData.aiText;
+            if (aiData.success && aiData.aiReport) {
+                const r = aiData.aiReport;
+                if (r.executiveSummary) aiFields.executiveSummary = r.executiveSummary;
+                if (r.projectOverview) aiFields.projectOverview = r.projectOverview;
+                if (r.delayAnalysis) aiFields.delayAnalysis = r.delayAnalysis;
+                if (r.lessonsLearned) aiFields.lessonsLearned = r.lessonsLearned;
+                if (r.strategicSuggestions) aiFields.strategicSuggestions = r.strategicSuggestions;
             }
         } catch (aiErr) {
-            console.warn('[AI ENHANCE] Fallback to raw summary:', aiErr.message);
+            console.warn('[AI ENHANCE] Fallback to raw data:', aiErr.message);
         }
 
         if (btn) { btn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Generating...'; lucide.createIcons(); }
@@ -1381,7 +1389,7 @@ async function generateAndDownloadReport(projectId, btn) {
         // Build a real .docx document using the docx library
         const doc = buildDocxReport({
             project, stages, delays, lessons,
-            totalProgress, projectStatus, executiveSummary
+            totalProgress, projectStatus, ...aiFields
         });
 
         // Save report metadata to DB (structured data, not HTML)
@@ -1390,7 +1398,7 @@ async function generateAndDownloadReport(projectId, btn) {
             projectId: projectId,
             currentStageStatus: projectStatus,
             overallProgress: totalProgress,
-            executiveSummary: executiveSummary,
+            executiveSummary: aiFields.executiveSummary,
             keyDelaysSummary: numDelays > 0 ? `${numDelays} delay(s) recorded` : 'No delays recorded',
             lessonsLearnedSummary: lessons.length > 0 ? `${lessons.length} lesson(s) recorded` : 'No lessons recorded',
             content: '__docx__', // marker indicating this is a docx-format report
@@ -1424,7 +1432,7 @@ async function generateAndDownloadReport(projectId, btn) {
 
 // Helper: Builds a docx.Document object from report data
 
-function buildDocxReport({ project, stages, delays, lessons, totalProgress, projectStatus, executiveSummary }) {
+function buildDocxReport({ project, stages, delays, lessons, totalProgress, projectStatus, executiveSummary, projectOverview, delayAnalysis, lessonsLearned, strategicSuggestions }) {
     // 1. Safety Check: Did the CDN actually load?
     if (typeof window.docx === "undefined") {
         console.error("CRITICAL ERROR: The docx library failed to load from the CDN.");
@@ -1445,6 +1453,21 @@ function buildDocxReport({ project, stages, delays, lessons, totalProgress, proj
         if (status === 'Behind Schedule') return RED;
         if (status === 'Completed') return '2980b9';
         return GREEN;
+    }
+
+    // CRITICAL HELPER: Splits AI text on newlines into separate Paragraphs
+    // This prevents the docx library from crashing on \n inside a single TextRun
+    function splitToParagraphs(text, options = {}) {
+        const { fontSize = 22, color = DARK_GREY, bold = false, italic = false } = options;
+        const fallback = text || 'No information available.';
+        return fallback.split('\n')
+            .filter(line => line.trim() !== '')
+            .map(line =>
+                new Paragraph({
+                    spacing: { after: 180 },
+                    children: [new TextRun({ text: line.trim(), font: 'Arial', size: fontSize, color, bold, italics: italic })]
+                })
+            );
     }
 
     // Build stage performance table rows
@@ -1468,66 +1491,6 @@ function buildDocxReport({ project, stages, delays, lessons, totalProgress, proj
             ]
         }))
     ];
-
-    // Build delay paragraphs
-    const delayParagraphs = delays.length === 0
-        ? [new Paragraph({ children: [new TextRun({ text: 'No delays logged.', font: 'Arial', size: 22, italics: true, color: '7f8c8d' })] })]
-        : delays.map(d => {
-            const stageName = stages.find(s => s.id === d.stageId)?.name || 'Unknown Stage';
-            return new Paragraph({
-                bullet: { level: 0 },
-                spacing: { after: 120 },
-                children: [
-                    new TextRun({ text: 'Stage: ', bold: true, font: 'Arial', size: 22 }),
-                    new TextRun({ text: stageName, font: 'Arial', size: 22 }),
-                    new TextRun({ text: '\nReason: ', bold: true, font: 'Arial', size: 22, break: 1 }),
-                    new TextRun({ text: d.reason, font: 'Arial', size: 22 }),
-                    new TextRun({ text: '\nImpact: ', bold: true, font: 'Arial', size: 22, break: 1 }),
-                    new TextRun({ text: d.impact, font: 'Arial', size: 22 }),
-                ]
-            });
-        });
-
-    // Build lessons paragraphs
-    const lessonParagraphs = lessons.length === 0
-        ? [new Paragraph({ children: [new TextRun({ text: 'No lessons logged.', font: 'Arial', size: 22, italics: true, color: '7f8c8d' })] })]
-        : lessons.map(l => {
-            const stageName = l.stageId ? (stages.find(s => s.id === l.stageId)?.name || 'Unknown Stage') : 'General Project';
-            return new Paragraph({
-                bullet: { level: 0 },
-                spacing: { after: 120 },
-                children: [
-                    new TextRun({ text: stageName, bold: true, font: 'Arial', size: 22 }),
-                    new TextRun({ text: '\nDescription: ', bold: true, font: 'Arial', size: 22, break: 1 }),
-                    new TextRun({ text: l.lessonDesc, font: 'Arial', size: 22 }),
-                    new TextRun({ text: '\nRecommendation: ', bold: true, font: 'Arial', size: 22, break: 1 }),
-                    new TextRun({ text: l.recommendation, font: 'Arial', size: 22 }),
-                ]
-            });
-        });
-
-    // Build overview bullet points
-    const overviewItems = [
-        { label: 'Name', value: project.name },
-        { label: 'Project ID', value: project.id },
-        { label: 'Description', value: project.description || 'N/A' },
-        { label: 'Creation Date', value: new Date(project.createdAt).toLocaleDateString() },
-        { label: 'Total Stages', value: String(stages.length) },
-        { label: 'Overall Progress', value: `${totalProgress}%` },
-        { label: 'Current Status', value: projectStatus },
-    ];
-    if (project.completionDate) {
-        overviewItems.push({ label: 'Completion Date', value: new Date(project.completionDate).toLocaleDateString() });
-    }
-
-    const overviewParagraphs = overviewItems.map(item => new Paragraph({
-        bullet: { level: 0 },
-        spacing: { after: 60 },
-        children: [
-            new TextRun({ text: `${item.label}: `, bold: true, font: 'Arial', size: 22 }),
-            new TextRun({ text: item.value, font: 'Arial', size: 22 }),
-        ]
-    }));
 
     return new Document({
         styles: {
@@ -1553,34 +1516,41 @@ function buildDocxReport({ project, stages, delays, lessons, totalProgress, proj
                     spacing: { after: 300 },
                     children: [new TextRun({ text: `Generated At: ${new Date().toLocaleString()}`, font: 'Arial', size: 18, color: '7f8c8d' })],
                 }),
-                // 1. Executive Summary
-                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '1. EXECUTIVE SUMMARY', bold: true, font: 'Arial', color: '34495e' })] }),
 
-                // 👇 --- NEW MULTI-PARAGRAPH SPLITTER --- 👇
-                ...(executiveSummary || "No summary provided.").split('\n')
-                    .filter(line => line.trim() !== '') // Ignore empty blank lines
-                    .map(line =>
-                        new Paragraph({
-                            spacing: { after: 200 },
-                            children: [new TextRun({ text: line.trim(), font: 'Arial', size: 22 })]
-                        })
-                    ),
-                // 👆 --- NEW MULTI-PARAGRAPH SPLITTER --- 👆
-                // 2. Project Overview
+                // 1. EXECUTIVE SUMMARY (AI-enhanced, multi-paragraph)
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '1. EXECUTIVE SUMMARY', bold: true, font: 'Arial', color: '34495e' })] }),
+                ...splitToParagraphs(executiveSummary),
+
+                // 2. PROJECT OVERVIEW (AI-enhanced, multi-paragraph)
                 new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '2. PROJECT OVERVIEW', bold: true, font: 'Arial', color: '34495e' })] }),
-                ...overviewParagraphs,
-                // 3. Stage-by-Stage Performance
+                ...splitToParagraphs(projectOverview),
+
+                // 3. STAGE-BY-STAGE PERFORMANCE (structured table — unchanged)
                 new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '3. STAGE-BY-STAGE PERFORMANCE', bold: true, font: 'Arial', color: '34495e' })] }),
                 new Table({
                     width: { size: 100, type: WidthType.PERCENTAGE },
                     rows: stageTableRows,
                 }),
-                // 4. Delay Reasons
-                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '4. DELAY REASONS', bold: true, font: 'Arial', color: '34495e' })] }),
-                ...delayParagraphs,
-                // 5. Lessons Learned
+
+                // 4. DELAY ANALYSIS (AI-enhanced, multi-paragraph)
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '4. DELAY ANALYSIS', bold: true, font: 'Arial', color: '34495e' })] }),
+                ...splitToParagraphs(delayAnalysis),
+
+                // 5. LESSONS LEARNED (AI-enhanced, multi-paragraph)
                 new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '5. LESSONS LEARNED', bold: true, font: 'Arial', color: '34495e' })] }),
-                ...lessonParagraphs,
+                ...splitToParagraphs(lessonsLearned),
+
+                // 6. STRATEGIC SUGGESTIONS (NEW — AI-generated)
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '6. STRATEGIC SUGGESTIONS', bold: true, font: 'Arial', color: '34495e' })] }),
+                ...splitToParagraphs(strategicSuggestions),
+
+                // Footer separator
+                new Paragraph({
+                    spacing: { before: 400 },
+                    border: { top: { style: BorderStyle.SINGLE, size: 3, color: BLUE_ACCENT } },
+                    children: [new TextRun({ text: '— End of Report —', font: 'Arial', size: 18, color: '7f8c8d', italics: true })],
+                    alignment: AlignmentType.CENTER,
+                }),
             ]
         }]
     });
