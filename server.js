@@ -479,6 +479,11 @@ const server = http.createServer(async (req, res) => {
                 }
             }
 
+            // Filter out dismissed notifications before sending to frontend
+            if (dbData.notifications) {
+                dbData.notifications = dbData.notifications.filter(n => !n.dismissed);
+            }
+
             logRequest(req.method, pathname, 200);
             sendJSON(res, 200, dbData);
 
@@ -722,9 +727,12 @@ const server = http.createServer(async (req, res) => {
             sendJSON(res, 200, { success: true, message: 'Document deleted', id: docId });
 
             // ==============================================================
-            // DELETE /api/notifications — Remove notification(s)
-            // ?id=xxx          → delete single notification by ID
-            // ?userId=xxx&clearRead=true → delete all read notifications for user
+            // DELETE /api/notifications — Dismiss notification(s)
+            // Uses dismissed flag (NOT hard delete) so that
+            // generateDelayNotifications() dedup still finds them
+            // and does not re-create the same notification on next load.
+            // ?id=xxx          → dismiss single notification by ID
+            // ?userId=xxx&clearRead=true → dismiss all read notifications for user
             // ==============================================================
         } else if (pathname === '/api/notifications' && req.method === 'DELETE') {
             const notifId = query.id;
@@ -732,20 +740,26 @@ const server = http.createServer(async (req, res) => {
             const clearRead = query.clearRead === 'true';
 
             if (notifId) {
-                // Delete a single notification by ID
-                const result = await db.collection('notifications').deleteOne({ id: notifId });
-                if (result.deletedCount === 0) {
+                // Soft-dismiss a single notification by ID
+                const result = await db.collection('notifications').updateOne(
+                    { id: notifId },
+                    { $set: { dismissed: true, read: true } }
+                );
+                if (result.matchedCount === 0) {
                     logRequest(req.method, pathname, 404);
                     sendJSON(res, 404, { error: 'Notification not found', id: notifId });
                     return;
                 }
                 logRequest(req.method, pathname, 200);
-                sendJSON(res, 200, { success: true, message: 'Notification deleted', id: notifId });
+                sendJSON(res, 200, { success: true, message: 'Notification dismissed', id: notifId });
             } else if (userId && clearRead) {
-                // Bulk delete all read notifications for a specific user
-                const result = await db.collection('notifications').deleteMany({ userId: userId, read: true });
+                // Bulk-dismiss all read notifications for a specific user
+                const result = await db.collection('notifications').updateMany(
+                    { userId: userId, read: true },
+                    { $set: { dismissed: true } }
+                );
                 logRequest(req.method, pathname, 200);
-                sendJSON(res, 200, { success: true, message: `Cleared ${result.deletedCount} read notification(s)`, deletedCount: result.deletedCount });
+                sendJSON(res, 200, { success: true, message: `Dismissed ${result.modifiedCount} read notification(s)`, dismissedCount: result.modifiedCount });
             } else {
                 logRequest(req.method, pathname, 400);
                 sendJSON(res, 400, { error: 'Missing required query parameter: id or (userId + clearRead)' });
