@@ -1271,18 +1271,46 @@ async function downloadProjectReport(projectId, btn) {
                 })
             });
             const aiData = await aiRes.json();
-            if (aiData.success && aiData.aiReport) {
-                const r = aiData.aiReport;
+
+            // 1. Let's see exactly what the backend handed us!
+            console.log("THE SMOKING GUN:", aiData);
+
+            // 2. The Bulletproof 5-Section Extractor
+            let r = null;
+
+            if (aiData && aiData.aiReport) {
+                // Scenario A: Antigravity's ideal format
+                r = aiData.aiReport;
+            } else if (aiData && aiData.executiveSummary) {
+                // Scenario B: The backend sent the JSON directly without wrapping it in 'aiReport'
+                r = aiData;
+            } else if (aiData && aiData.candidates && aiData.candidates[0] && aiData.candidates[0].content) {
+                // Scenario C: The raw Google Gemini payload!
+                let rawText = aiData.candidates[0].content.parts[0].text;
+                // Strip out markdown formatting if Gemini wrapped it in ```json
+                rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+                try {
+                    r = JSON.parse(rawText);
+                } catch (e) {
+                    console.warn("Could not parse Gemini text into JSON:", rawText);
+                }
+            }
+
+            // 3. If we successfully caught the data, map it to the fields!
+            if (r) {
+                console.log("DID WE CATCH IT? YES!", r);
                 if (r.executiveSummary) aiFields.executiveSummary = r.executiveSummary;
                 if (r.projectOverview) aiFields.projectOverview = r.projectOverview;
                 if (r.delayAnalysis) aiFields.delayAnalysis = r.delayAnalysis;
                 if (r.lessonsLearned) aiFields.lessonsLearned = r.lessonsLearned;
                 if (r.strategicSuggestions) aiFields.strategicSuggestions = r.strategicSuggestions;
+            } else {
+                console.warn("AI responded, but couldn't find the 5 fields inside:", aiData);
             }
+
         } catch (aiErr) {
             console.warn('[AI ENHANCE] Fallback to raw data:', aiErr.message);
         }
-
         if (btn) { btn.innerHTML = '<i data-lucide="loader" class="spin-icon"></i> Generating...'; lucide.createIcons(); }
 
         const doc = buildDocxReport({
