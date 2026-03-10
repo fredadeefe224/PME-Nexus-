@@ -1555,7 +1555,17 @@ function buildDocxReport({ project, stages, delays, lessons, totalProgress, proj
                 }),
                 // 1. Executive Summary
                 new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '1. EXECUTIVE SUMMARY', bold: true, font: 'Arial', color: '34495e' })] }),
-                new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: executiveSummary, font: 'Arial', size: 22 })] }),
+
+                // 👇 --- NEW MULTI-PARAGRAPH SPLITTER --- 👇
+                ...(executiveSummary || "No summary provided.").split('\n')
+                    .filter(line => line.trim() !== '') // Ignore empty blank lines
+                    .map(line =>
+                        new Paragraph({
+                            spacing: { after: 200 },
+                            children: [new TextRun({ text: line.trim(), font: 'Arial', size: 22 })]
+                        })
+                    ),
+                // 👆 --- NEW MULTI-PARAGRAPH SPLITTER --- 👆
                 // 2. Project Overview
                 new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '2. PROJECT OVERVIEW', bold: true, font: 'Arial', color: '34495e' })] }),
                 ...overviewParagraphs,
