@@ -722,6 +722,72 @@ const server = http.createServer(async (req, res) => {
             sendJSON(res, 200, { success: true, message: 'Document deleted', id: docId });
 
             // ==============================================================
+            // DELETE /api/notifications — Remove notification(s)
+            // ?id=xxx          → delete single notification by ID
+            // ?userId=xxx&clearRead=true → delete all read notifications for user
+            // ==============================================================
+        } else if (pathname === '/api/notifications' && req.method === 'DELETE') {
+            const notifId = query.id;
+            const userId = query.userId;
+            const clearRead = query.clearRead === 'true';
+
+            if (notifId) {
+                // Delete a single notification by ID
+                const result = await db.collection('notifications').deleteOne({ id: notifId });
+                if (result.deletedCount === 0) {
+                    logRequest(req.method, pathname, 404);
+                    sendJSON(res, 404, { error: 'Notification not found', id: notifId });
+                    return;
+                }
+                logRequest(req.method, pathname, 200);
+                sendJSON(res, 200, { success: true, message: 'Notification deleted', id: notifId });
+            } else if (userId && clearRead) {
+                // Bulk delete all read notifications for a specific user
+                const result = await db.collection('notifications').deleteMany({ userId: userId, read: true });
+                logRequest(req.method, pathname, 200);
+                sendJSON(res, 200, { success: true, message: `Cleared ${result.deletedCount} read notification(s)`, deletedCount: result.deletedCount });
+            } else {
+                logRequest(req.method, pathname, 400);
+                sendJSON(res, 400, { error: 'Missing required query parameter: id or (userId + clearRead)' });
+            }
+
+            // ==============================================================
+            // PUT /api/notifications — Mark a notification as read
+            // Body: { id: "notif-id" }
+            // ==============================================================
+        } else if (pathname === '/api/notifications' && req.method === 'PUT') {
+            let body = '';
+            req.on('data', chunk => body += chunk.toString());
+            req.on('end', async () => {
+                try {
+                    const { id: notifId } = JSON.parse(body);
+                    if (!notifId) {
+                        logRequest(req.method, pathname, 400);
+                        sendJSON(res, 400, { error: 'Missing required field: id' });
+                        return;
+                    }
+
+                    const result = await db.collection('notifications').updateOne(
+                        { id: notifId },
+                        { $set: { read: true } }
+                    );
+
+                    if (result.matchedCount === 0) {
+                        logRequest(req.method, pathname, 404);
+                        sendJSON(res, 404, { error: 'Notification not found', id: notifId });
+                        return;
+                    }
+
+                    logRequest(req.method, pathname, 200);
+                    sendJSON(res, 200, { success: true, message: 'Notification marked as read', id: notifId });
+                } catch (e) {
+                    console.error('[NOTIF UPDATE ERROR]', e.message);
+                    logRequest(req.method, pathname, 500);
+                    sendJSON(res, 500, { error: 'Failed to update notification: ' + e.message });
+                }
+            });
+
+            // ==============================================================
             // POST /api/enhance-report — AI-enhanced report via Gemini
             // ==============================================================
         } else if (pathname === '/api/enhance-report' && req.method === 'POST') {

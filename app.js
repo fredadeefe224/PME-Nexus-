@@ -1937,11 +1937,26 @@ function renderNotifications() {
             clearAllBtn.style.cssText = 'background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; align-self: flex-end; transition: background 0.2s;';
             clearAllBtn.addEventListener('mouseenter', () => { clearAllBtn.style.background = 'rgba(239,68,68,0.2)'; });
             clearAllBtn.addEventListener('mouseleave', () => { clearAllBtn.style.background = 'rgba(239,68,68,0.1)'; });
-            clearAllBtn.addEventListener('click', () => {
-                const allNotifs = DB.get('notifications');
-                const remaining = allNotifs.filter(x => !(x.userId === currentUser.id && x.read));
-                DB.set('notifications', remaining);
-                renderNotifications();
+            clearAllBtn.addEventListener('click', async () => {
+                clearAllBtn.disabled = true;
+                clearAllBtn.textContent = 'Clearing...';
+                try {
+                    const res = await fetch(`${API_BASE}/api/notifications?userId=${currentUser.id}&clearRead=true`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.success) {
+                        // Remove from local store after backend confirms
+                        const allNotifs = DB.get('notifications');
+                        window.dbStore.notifications = allNotifs.filter(x => !(x.userId === currentUser.id && x.read));
+                        renderNotifications();
+                    } else {
+                        showToast('Failed to clear notifications.', 'error');
+                    }
+                } catch (err) {
+                    console.error('[CLEAR NOTIFS ERROR]', err);
+                    showToast('Failed to clear notifications.', 'error');
+                    clearAllBtn.disabled = false;
+                    clearAllBtn.textContent = 'Clear All Read';
+                }
             });
             container.appendChild(clearAllBtn);
         }
@@ -1963,38 +1978,65 @@ function renderNotifications() {
                 <div style="color: var(--text-muted); font-size: 0.8rem;">${new Date(n.createdAt).toLocaleString()}</div>
             `;
 
-            // Dismiss X button
+            // Dismiss X button — deletes from backend database
             const dismissBtn = document.createElement('button');
             dismissBtn.innerHTML = '&times;';
             dismissBtn.title = 'Dismiss notification';
             dismissBtn.style.cssText = 'position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s, color 0.2s;';
             dismissBtn.addEventListener('mouseenter', () => { dismissBtn.style.background = 'rgba(239,68,68,0.15)'; dismissBtn.style.color = 'var(--danger)'; });
             dismissBtn.addEventListener('mouseleave', () => { dismissBtn.style.background = 'none'; dismissBtn.style.color = 'var(--text-muted)'; });
-            dismissBtn.addEventListener('click', (e) => {
+            dismissBtn.addEventListener('click', async (e) => {
                 e.stopPropagation(); // Don't trigger the navigate-to-project click
-                // Mark as read and remove from DB
-                const allNotifs = DB.get('notifications');
-                const idx = allNotifs.findIndex(x => x.id === n.id);
-                if (idx !== -1) {
-                    allNotifs.splice(idx, 1);
-                    DB.set('notifications', allNotifs);
-                }
-                // Animate out then re-render
+                dismissBtn.disabled = true;
+                // Animate out immediately for responsiveness
                 el.style.opacity = '0';
                 el.style.transform = 'translateX(30px)';
-                setTimeout(() => renderNotifications(), 300);
+                try {
+                    const res = await fetch(`${API_BASE}/api/notifications?id=${n.id}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.success) {
+                        // Remove from local store after backend confirms
+                        const allNotifs = DB.get('notifications');
+                        const idx = allNotifs.findIndex(x => x.id === n.id);
+                        if (idx !== -1) allNotifs.splice(idx, 1);
+                        window.dbStore.notifications = allNotifs;
+                        setTimeout(() => renderNotifications(), 300);
+                    } else {
+                        // Roll back animation on failure
+                        el.style.opacity = '1';
+                        el.style.transform = 'translateX(0)';
+                        showToast('Failed to dismiss notification.', 'error');
+                    }
+                } catch (err) {
+                    console.error('[DELETE NOTIF ERROR]', err);
+                    el.style.opacity = '1';
+                    el.style.transform = 'translateX(0)';
+                    showToast('Failed to dismiss notification.', 'error');
+                }
             });
             el.appendChild(dismissBtn);
 
-            // Click to mark read + navigate to project
-            el.addEventListener('click', () => {
+            // Click to mark read + navigate to project — persists to backend
+            el.addEventListener('click', async () => {
                 if (!n.read) {
-                    const allNotifs = DB.get('notifications');
-                    const target = allNotifs.find(x => x.id === n.id);
-                    if (target) {
-                        target.read = true;
-                        DB.set('notifications', allNotifs);
-                        renderNotifications();
+                    try {
+                        const res = await fetch(`${API_BASE}/api/notifications`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: n.id })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            // Update local store after backend confirms
+                            const allNotifs = DB.get('notifications');
+                            const target = allNotifs.find(x => x.id === n.id);
+                            if (target) target.read = true;
+                            window.dbStore.notifications = allNotifs;
+                            renderNotifications();
+                        }
+                    } catch (err) {
+                        console.error('[MARK READ ERROR]', err);
+                        // Still navigate even if mark-read fails
                     }
                 }
                 const panel = document.getElementById('notifications-panel');
@@ -2006,6 +2048,7 @@ function renderNotifications() {
         });
     }
 }
+
 
 
 function handleSaveDelay(e) {
