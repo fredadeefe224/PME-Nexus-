@@ -811,7 +811,8 @@ function handleCreateProject(e) {
             actualStart: '',
             actualEnd: '',
             progress: 0,
-            status: 'On Track'
+            status: 'On Track',
+            completedActivities: []
         });
     });
     DB.set('stages', stages);
@@ -1265,7 +1266,7 @@ async function downloadProjectReport(projectId, btn) {
                     projectDescription: project.description || '',
                     projectStatus,
                     totalProgress,
-                    stages: stages.map(s => ({ name: s.name, status: s.status, progress: s.progress, plannedStart: s.plannedStart, plannedEnd: s.plannedEnd, actualStart: s.actualStart, actualEnd: s.actualEnd })),
+                    stages: stages.map(s => ({ name: s.name, status: s.status, progress: s.progress, plannedStart: s.plannedStart, plannedEnd: s.plannedEnd, actualStart: s.actualStart, actualEnd: s.actualEnd, completedActivities: s.completedActivities || [] })),
                     delays: delays.map(d => ({ stageId: d.stageId, reason: d.reason, impact: d.impact })),
                     lessons: lessons.map(l => ({ stageId: l.stageId, lessonDesc: l.lessonDesc, recommendation: l.recommendation }))
                 })
@@ -1394,7 +1395,7 @@ async function generateAndDownloadReport(projectId, btn) {
                     projectDescription: project.description || '',
                     projectStatus,
                     totalProgress,
-                    stages: stages.map(s => ({ name: s.name, status: s.status, progress: s.progress, plannedStart: s.plannedStart, plannedEnd: s.plannedEnd, actualStart: s.actualStart, actualEnd: s.actualEnd })),
+                    stages: stages.map(s => ({ name: s.name, status: s.status, progress: s.progress, plannedStart: s.plannedStart, plannedEnd: s.plannedEnd, actualStart: s.actualStart, actualEnd: s.actualEnd, completedActivities: s.completedActivities || [] })),
                     delays: delays.map(d => ({ stageId: d.stageId, reason: d.reason, impact: d.impact })),
                     lessons: lessons.map(l => ({ stageId: l.stageId, lessonDesc: l.lessonDesc, recommendation: l.recommendation }))
                 })
@@ -1520,6 +1521,37 @@ function buildDocxReport({ project, stages, delays, lessons, totalProgress, proj
         }))
     ];
 
+    // Build STAGE ACCOMPLISHMENTS paragraphs (section 4)
+    const stageAccomplishments = [];
+    stages.forEach(s => {
+        const activities = Array.isArray(s.completedActivities) ? s.completedActivities : [];
+        if (activities.length > 0) {
+            // Stage name as bold sub-heading
+            stageAccomplishments.push(
+                new Paragraph({
+                    spacing: { before: 200, after: 80 },
+                    children: [new TextRun({ text: s.name, bold: true, font: 'Arial', size: 22, color: BLUE_HEADER })]
+                })
+            );
+            // Each activity as a bullet point using the CRITICAL docx bullet syntax
+            activities.forEach(activity => {
+                stageAccomplishments.push(
+                    new Paragraph({ text: activity, bullet: { level: 0 }, font: 'Arial', size: 22 })
+                );
+            });
+        }
+    });
+
+    // If no stages had activities, show a placeholder message
+    if (stageAccomplishments.length === 0) {
+        stageAccomplishments.push(
+            new Paragraph({
+                spacing: { after: 180 },
+                children: [new TextRun({ text: 'No completed activities have been recorded for any stage.', font: 'Arial', size: 22, color: DARK_GREY, italics: true })]
+            })
+        );
+    }
+
     return new Document({
         styles: {
             default: {
@@ -1560,16 +1592,20 @@ function buildDocxReport({ project, stages, delays, lessons, totalProgress, proj
                     rows: stageTableRows,
                 }),
 
-                // 4. DELAY ANALYSIS (AI-enhanced, multi-paragraph)
-                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '4. DELAY ANALYSIS', bold: true, font: 'Arial', color: '34495e' })] }),
+                // 4. STAGE ACCOMPLISHMENTS (NEW — completed activities per stage with bullet points)
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '4. STAGE ACCOMPLISHMENTS', bold: true, font: 'Arial', color: '34495e' })] }),
+                ...stageAccomplishments,
+
+                // 5. DELAY ANALYSIS (AI-enhanced, multi-paragraph)
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '5. DELAY ANALYSIS', bold: true, font: 'Arial', color: '34495e' })] }),
                 ...splitToParagraphs(delayAnalysis),
 
-                // 5. LESSONS LEARNED (AI-enhanced, multi-paragraph)
-                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '5. LESSONS LEARNED', bold: true, font: 'Arial', color: '34495e' })] }),
+                // 6. LESSONS LEARNED (AI-enhanced, multi-paragraph)
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '6. LESSONS LEARNED', bold: true, font: 'Arial', color: '34495e' })] }),
                 ...splitToParagraphs(lessonsLearned),
 
-                // 6. STRATEGIC SUGGESTIONS (NEW — AI-generated)
-                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '6. STRATEGIC SUGGESTIONS', bold: true, font: 'Arial', color: '34495e' })] }),
+                // 7. STRATEGIC SUGGESTIONS (AI-generated)
+                new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: '7. STRATEGIC SUGGESTIONS', bold: true, font: 'Arial', color: '34495e' })] }),
                 ...splitToParagraphs(strategicSuggestions),
 
                 // Footer separator
@@ -1583,6 +1619,7 @@ function buildDocxReport({ project, stages, delays, lessons, totalProgress, proj
         }]
     });
 }
+
 
 // Trigger browser download of a real .docx document using the docx library
 async function triggerDocxDownload(docObject, fileName) {
@@ -1624,6 +1661,13 @@ function handleSaveStage(e) {
     const actualEnd = document.getElementById('stage-actual-end').value;
     const progress = parseInt(document.getElementById('stage-progress').value) || 0;
 
+    // Read completed activities from textarea (one per line)
+    const activitiesRaw = document.getElementById('stage-completed-activities').value;
+    const completedActivities = activitiesRaw
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+
     // Auto-calculate status
     const todayStr = new Date().toISOString().split('T')[0];
     let status = 'On Track';
@@ -1641,7 +1685,7 @@ function handleSaveStage(e) {
         if (index !== -1) {
             stages[index] = {
                 ...stages[index],
-                name, plannedStart, plannedEnd, actualStart, actualEnd, progress, status
+                name, plannedStart, plannedEnd, actualStart, actualEnd, progress, status, completedActivities
             };
         }
     } else {
@@ -1649,7 +1693,7 @@ function handleSaveStage(e) {
         const newStage = {
             id: Date.now().toString(),
             projectId: currentProjectId,
-            name, plannedStart, plannedEnd, actualStart, actualEnd, progress, status
+            name, plannedStart, plannedEnd, actualStart, actualEnd, progress, status, completedActivities
         };
         stages.push(newStage);
     }
@@ -1797,6 +1841,14 @@ function openEditStageModal(stageId) {
     document.getElementById('stage-actual-end').value = stage.actualEnd || '';
     document.getElementById('stage-progress').value = stage.progress;
     document.getElementById('stage-status').value = stage.status;
+
+    // Pre-fill completed activities (join array back to newline-separated text)
+    const activitiesField = document.getElementById('stage-completed-activities');
+    if (activitiesField) {
+        activitiesField.value = Array.isArray(stage.completedActivities)
+            ? stage.completedActivities.join('\n')
+            : '';
+    }
 
     toggleModal('modal-stage');
 }

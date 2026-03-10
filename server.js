@@ -144,7 +144,7 @@ async function callGeminiAPI(reportData) {
 
     const systemPrompt = `You are a Senior Project Manager and Monitoring & Evaluation (M&E) Specialist with 20 years of experience writing formal project reports for government agencies and international organizations.
 
-You will receive raw project data including: project name, description, overall status, progress percentage, stage-by-stage performance, delay records, and lessons learned.
+You will receive raw project data including: project name, description, overall status, progress percentage, stage-by-stage performance, delay records, lessons learned, and — critically — a "completedActivities" array for each stage listing specific tasks and accomplishments completed during that stage.
 
 Your task is to analyze this data deeply and return a STRICTLY FORMATTED JSON OBJECT with exactly these 5 keys. Each value must be detailed, multi-paragraph flowing text written in third-person formal language suitable for stakeholder distribution.
 
@@ -154,13 +154,14 @@ CRITICAL RULES:
 3. Use newline characters (\\n\\n) to separate paragraphs within each field.
 4. Do NOT use markdown formatting, bullet points, numbered lists, or headers inside the values.
 5. Reference specific project data (stage names, dates, percentages) wherever relevant.
+6. PAY SPECIAL ATTENTION to each stage's "completedActivities" array. Use these concrete accomplishments to write an accurate and richly detailed executiveSummary and projectOverview. Mention specific completed activities by name when discussing stage progress and achievements.
 
 The JSON object must have these exact keys:
 
 {
-  "executiveSummary": "A comprehensive 3-4 paragraph analysis of the project's current standing. Open with a formal status declaration citing the project name. Discuss overall progress with specific percentages. Analyze stage-level performance referencing individual stage names and their status. Close with a risk assessment and forward-looking statement.",
+  "executiveSummary": "A comprehensive 3-4 paragraph analysis of the project's current standing. Open with a formal status declaration citing the project name. Discuss overall progress with specific percentages. Analyze stage-level performance referencing individual stage names, their status, AND their completed activities. Close with a risk assessment and forward-looking statement.",
 
-  "projectOverview": "A detailed 2-3 paragraph deep dive into the project's scope, objectives, and overall progress trajectory. Discuss what the project aims to achieve, how many stages comprise the implementation plan, the timeline from earliest planned start to latest planned end, and how current progress compares to expectations.",
+  "projectOverview": "A detailed 2-3 paragraph deep dive into the project's scope, objectives, and overall progress trajectory. Discuss what the project aims to achieve, how many stages comprise the implementation plan, the timeline from earliest planned start to latest planned end, and how current progress compares to expectations. Incorporate specific completed activities from each stage to paint a concrete picture of what has been accomplished so far.",
 
   "delayAnalysis": "A thorough 2-4 paragraph professional analysis of all documented delays. For each delay, discuss the affected stage by name, the root cause, the downstream impact on the project timeline, and any cascading effects on dependent stages. If no delays exist, write a paragraph noting the project's strong adherence to schedule.",
 
